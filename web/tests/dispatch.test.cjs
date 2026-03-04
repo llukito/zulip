@@ -47,6 +47,9 @@ const message_events = mock_esm("../src/message_events", {
     update_current_view_for_topic_visibility: noop,
 });
 const message_lists = mock_esm("../src/message_lists");
+mock_esm("../src/thumbnail", {
+    update_thumbnails: noop,
+});
 const user_topics_ui = mock_esm("../src/user_topics_ui");
 const muted_users_ui = mock_esm("../src/muted_users_ui");
 const narrow_title = mock_esm("../src/narrow_title");
@@ -177,6 +180,16 @@ people.init();
 people.add_active_user(me);
 people.add_active_user(test_user);
 people.initialize_current_user(me.user_id);
+
+const bot_user = {
+    email: "the-bot@example.com",
+    user_id: 42,
+    full_name: "The Bot",
+    bot_type: 1,
+    is_active: true,
+    bot_owner_id: test_user.user_id,
+};
+people.add_active_user(bot_user);
 
 message_store.update_message_cache({
     type: "server_message",
@@ -738,6 +751,10 @@ run_test("realm settings", ({override}) => {
     dispatch(event);
     assert_same(realm.realm_enable_spectator_access, true);
 
+    event = event_fixtures.realm__update__media_preview_size;
+    dispatch(event);
+    assert_same(realm.realm_media_preview_size, 150);
+
     event = event_fixtures.realm__update_dict__default;
     override(realm, "realm_create_multiuse_invite_group", 1);
     override(realm, "realm_allow_message_editing", false);
@@ -854,45 +871,16 @@ run_test("realm_bot delete", ({override}) => {
 });
 
 run_test("realm_bot update", ({override}) => {
-    let event = event_fixtures.realm_bot__update;
-    let bot_stub = make_stub();
+    const event = event_fixtures.realm_bot__update;
+    const bot_stub = make_stub();
     override(bot_data, "update", bot_stub.f);
 
     dispatch(event);
 
     assert.equal(bot_stub.num_calls, 1);
-    let args = bot_stub.get_args("user_id", "bot");
+    const args = bot_stub.get_args("user_id", "bot");
     assert_same(args.user_id, event.bot.user_id);
     assert_same(args.bot, event.bot);
-
-    bot_stub = make_stub();
-    override(bot_data, "update", bot_stub.f);
-    let toggle_download_container_stub = make_stub();
-    override(
-        settings_bots,
-        "toggle_bot_config_download_container",
-        toggle_download_container_stub.f,
-    );
-
-    event = event_fixtures.realm_bot__update_owner;
-    override(settings_bots, "redraw_your_bots_list", noop);
-    dispatch(event);
-    assert.equal(toggle_download_container_stub.num_calls, 1);
-    assert.equal(bot_stub.num_calls, 1);
-    args = bot_stub.get_args("user_id", "bot");
-    assert_same(args.user_id, event.bot.user_id);
-    assert_same(args.bot, event.bot);
-
-    toggle_download_container_stub = make_stub();
-    override(
-        settings_bots,
-        "toggle_bot_config_download_container",
-        toggle_download_container_stub.f,
-    );
-
-    event = event_fixtures.realm_bot__update_is_active;
-    dispatch(event);
-    assert.equal(toggle_download_container_stub.num_calls, 1);
 });
 
 run_test("realm_emoji", ({override}) => {

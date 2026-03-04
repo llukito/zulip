@@ -6,6 +6,7 @@ import re
 import string
 from datetime import datetime, timedelta
 from enum import Enum
+from pathlib import Path
 from typing import Any
 from unittest import mock, skipUnless
 
@@ -51,15 +52,17 @@ from zerver.lib.realm_description import get_realm_rendered_description, get_rea
 from zerver.lib.send_email import send_future_email
 from zerver.lib.streams import create_stream_if_needed
 from zerver.lib.test_classes import ZulipTestCase
-from zerver.lib.test_helpers import activate_push_notification_service, get_test_image_file
-from zerver.lib.upload import (
-    delete_message_attachments,
-    upload_avatar_image,
-    upload_message_attachment,
+from zerver.lib.test_helpers import (
+    activate_push_notification_service,
+    get_test_image_file,
+    read_test_image_file,
 )
+from zerver.lib.thumbnail import ThumbnailFormat
+from zerver.lib.upload import upload_avatar_image, upload_message_attachment
 from zerver.models import (
     Attachment,
     CustomProfileField,
+    ImageAttachment,
     Message,
     NamedUserGroup,
     Realm,
@@ -1244,6 +1247,7 @@ class RealmTest(ZulipTestCase):
             gif_rating_policy=10,
             waiting_period_threshold=-10,
             digest_weekday=10,
+            media_preview_size=10,
             message_content_delete_limit_seconds=-10,
             message_edit_history_visibility_policy=10,
             message_content_edit_limit_seconds=0,
@@ -2201,9 +2205,9 @@ class RealmTest(ZulipTestCase):
             realm_for_sharding=realm, name=SystemGroups.FULL_MEMBERS, is_system_group=True
         )
 
-        self.assert_length(UserGroupMembership.objects.filter(user_group=members_system_group), 9)
+        self.assert_length(UserGroupMembership.objects.filter(user_group=members_system_group), 10)
         self.assert_length(
-            UserGroupMembership.objects.filter(user_group=full_members_system_group), 9
+            UserGroupMembership.objects.filter(user_group=full_members_system_group), 10
         )
         self.assertEqual(realm.waiting_period_threshold, 0)
 
@@ -2371,6 +2375,7 @@ class RealmAPITest(ZulipTestCase):
             move_messages_within_stream_limit_seconds=[1000, 1100, 1200],
             move_messages_between_streams_limit_seconds=[1000, 1100, 1200],
             topics_policy=Realm.REALM_TOPICS_POLICY_TYPES,
+            media_preview_size=[100, 150, 200],
             default_avatar_source=["G", "J"],
         )
 
@@ -3055,35 +3060,29 @@ class ScrubRealmTest(ZulipTestCase):
         realm = get_realm("zulip")
         hamlet = self.example_user("hamlet")
         Attachment.objects.filter(realm=realm).delete()
+        self.assertEqual(ImageAttachment.objects.all().count(), 0)
         assert settings.LOCAL_UPLOADS_DIR is not None
         assert settings.LOCAL_FILES_DIR is not None
 
-        path_ids = []
-        for n in range(1, 4):
-            content = f"content{n}".encode()
-            url = upload_message_attachment(f"dummy{n}.txt", "text/plain", content, hamlet)[0]
-            base = "/user_uploads/"
-            self.assertEqual(base, url[: len(base)])
-            path_id = re.sub(r"/user_uploads/", "", url)
-            self.assertTrue(os.path.isfile(os.path.join(settings.LOCAL_FILES_DIR, path_id)))
-            path_ids.append(path_id)
+        self.assertEqual([p for p in Path(settings.LOCAL_FILES_DIR).rglob("*") if p.is_file()], [])
 
-        with mock.patch(
-            "zerver.actions.realm_settings.delete_message_attachments",
-            side_effect=delete_message_attachments,
-        ) as p:
-            do_delete_all_realm_attachments(realm, batch_size=2)
+        small_thumb = ThumbnailFormat("webp", 50, 50, animated=False)
+        big_thumb = ThumbnailFormat("webp", 100, 100, animated=False)
+        with (
+            self.thumbnail_formats(small_thumb, big_thumb),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            for n in range(1, 4):
+                upload_message_attachment(
+                    f"img-{n}.png", "image/png", read_test_image_file("img.png"), hamlet
+                )
 
-            self.assertEqual(p.call_count, 2)
-            p.assert_has_calls(
-                [
-                    mock.call([path_ids[0], path_ids[1]]),
-                    mock.call([path_ids[2]]),
-                ]
-            )
+        self.assert_length([p for p in Path(settings.LOCAL_FILES_DIR).rglob("*") if p.is_file()], 9)
+        do_delete_all_realm_attachments(realm)
         self.assertEqual(Attachment.objects.filter(realm=realm).count(), 0)
-        for file_path in path_ids:
-            self.assertFalse(os.path.isfile(os.path.join(settings.LOCAL_FILES_DIR, path_id)))
+        self.assertEqual(ImageAttachment.objects.all().count(), 0)
+
+        self.assertEqual([p for p in Path(settings.LOCAL_FILES_DIR).rglob("*") if p.is_file()], [])
 
     def test_scrub_realm(self) -> None:
         zulip = get_realm("zulip")

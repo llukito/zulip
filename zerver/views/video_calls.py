@@ -25,7 +25,7 @@ from requests import Response
 from requests_oauthlib import OAuth2Session
 from typing_extensions import TypedDict, override
 
-from zerver.actions.video_calls import do_set_zoom_token
+from zerver.actions.video_calls import do_set_video_call_provider_token
 from zerver.decorator import zulip_login_required
 from zerver.lib.cache import (
     cache_with_key,
@@ -150,13 +150,11 @@ class OAuthVideoCallProvider(ABC):
     create_meeting_url: str = NotImplemented
     token_key_name: str = NotImplemented
 
-    @abstractmethod
     def get_token(self, user: UserProfile) -> object | None:
-        pass
+        return user.third_party_api_state.get(self.token_key_name)
 
-    @abstractmethod
     def update_token(self, user: UserProfile, token: dict[str, object] | None) -> None:
-        pass
+        do_set_video_call_provider_token(user, self.token_key_name, token)
 
     @abstractmethod
     def get_meeting_details(self, request: HttpRequest, response: Response) -> HttpResponse:
@@ -238,15 +236,20 @@ class OAuthVideoCallProvider(ABC):
         self.update_token(request.user, token)
         return render(request, "zerver/close_window.html")
 
-    def make_video_call(
-        self, request: HttpRequest, user: UserProfile, payload: object = {}, **kwargs: Any
-    ) -> HttpResponse:
+    def oauth_post(
+        self,
+        user: UserProfile,
+        url: str,
+        *,
+        json: object = None,
+        **kwargs: Any,
+    ) -> Response:
         oauth = self.__get_session(user)
         if not oauth.authorized:
             raise InvalidVideoCallProviderTokenError(self.provider_name)
 
         try:
-            response = oauth.post(self.create_meeting_url, json=payload, **kwargs)
+            response = oauth.post(url, json=json, **kwargs)
         except OAuth2Error:
             self.update_token(user, None)
             raise InvalidVideoCallProviderTokenError(self.provider_name)
@@ -254,7 +257,14 @@ class OAuthVideoCallProvider(ABC):
         if response.status_code == 401:
             self.update_token(user, None)
             raise InvalidVideoCallProviderTokenError(self.provider_name)
-        elif not response.ok:
+
+        return response
+
+    def make_video_call(
+        self, request: HttpRequest, user: UserProfile, payload: object = {}, **kwargs: Any
+    ) -> HttpResponse:
+        response = self.oauth_post(user, self.create_meeting_url, json=payload, **kwargs)
+        if not response.ok:
             raise CreateVideoCallFailedError(self.provider_name)
 
         return self.get_meeting_details(request, response)
@@ -272,14 +282,6 @@ class ZoomGeneralOAuthProvider(OAuthVideoCallProvider):
         self.token_url = urljoin(settings.VIDEO_ZOOM_OAUTH_URL, "/oauth/token")
         self.auto_refresh_url = urljoin(settings.VIDEO_ZOOM_OAUTH_URL, "/oauth/token")
         self.create_meeting_url = urljoin(settings.VIDEO_ZOOM_API_URL, "/v2/users/me/meetings")
-
-    @override
-    def get_token(self, user: UserProfile) -> object | None:
-        return user.third_party_api_state.get(self.token_key_name)
-
-    @override
-    def update_token(self, user: UserProfile, token: dict[str, object] | None) -> None:
-        do_set_zoom_token(user, token)
 
     @override
     def get_meeting_details(self, request: HttpRequest, response: Response) -> HttpResponse:

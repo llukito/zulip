@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 import logging
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -399,19 +400,20 @@ def verify_registration_transfer_challenge_ack_endpoint(
     session = RegistrationTransferVerificationSession()
     url = urljoin(f"https://{hostname}", f"/api/v1/zulip-services/verify/{access_token}/")
 
-    exception_and_error_message: tuple[Exception, str] | None = None
+    exception_and_error_message: tuple[Exception | None, str] | None = None
     try:
-        response = session.get(url)
-        response.raise_for_status()
-    except requests.exceptions.HTTPError as e:
-        if check_transfer_challenge_response_secret_not_prepared(e.response):
+        response = session.get(url, allow_redirects=False)
+
+        if check_transfer_challenge_response_secret_not_prepared(response):
             logger.info("verify_registration_transfer:host:%s|secret_not_prepared", hostname)
             raise JsonableError(_("The host reported it has no verification secret."))
 
-        error_message = _("Error response received from the host: {status_code}").format(
-            status_code=response.status_code
-        )
-        exception_and_error_message = (e, error_message)
+        if response.status_code != 200:
+            error_message = _(
+                "Unexpected status code received from the host: {status_code}"
+            ).format(status_code=response.status_code)
+            exception_and_error_message = (None, error_message)
+
     except requests.exceptions.SSLError as e:
         error_message = "SSL error occurred while communicating with the host."
         exception_and_error_message = (e, error_message)
@@ -425,13 +427,18 @@ def verify_registration_transfer_challenge_ack_endpoint(
         error_message = "An error occurred while communicating with the host."
         exception_and_error_message = (e, error_message)
 
+    try:
+        if exception_and_error_message is None:
+            verification_secret = response.json()["verification_secret"]
+    except (json.JSONDecodeError, KeyError) as e:
+        error_message = "An error occurred while parsing the response from the host."
+        exception_and_error_message = (e, error_message)
+
     if exception_and_error_message is not None:
         exception, error_message = exception_and_error_message
         logger.info("verify_registration_transfer:host:%s|exception:%s", hostname, exception)
         raise JsonableError(error_message)
 
-    data = response.json()
-    verification_secret = data["verification_secret"]
     validate_registration_transfer_verification_secret(verification_secret, hostname)
 
     logger.info("verify_registration_transfer:host:%s|success", hostname)
@@ -1582,7 +1589,7 @@ def remote_server_post_analytics(
 
     # Lock the server, preventing this from racing with other
     # duplicate submissions of the data
-    server = RemoteZulipServer.objects.select_for_update().get(id=server.id)
+    server = RemoteZulipServer.objects.select_for_update(no_key=True).get(id=server.id)
 
     remote_server_version_updated = False
     if version is not None:

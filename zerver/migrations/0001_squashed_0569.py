@@ -1042,7 +1042,7 @@ class Migration(migrations.Migration):
                             ("J", "Generated using Jdenticon"),
                             ("U", "Uploaded by user"),
                         ],
-                        default="G",
+                        default="J",
                         max_length=1,
                     ),
                 ),

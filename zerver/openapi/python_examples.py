@@ -139,7 +139,7 @@ def add_subscriptions(client: Client) -> None:
     assert_success_response(result)
     validate_against_openapi_schema(result, "/users/me/subscriptions", "post", "200")
 
-    user_id = 25
+    user_id = 26
     ensure_users([user_id], ["newbie"])
     # {code_example|start}
     # To subscribe other users to a channel, you may pass
@@ -363,7 +363,7 @@ def get_members(client: Client) -> None:
             assert member.get("profile_data", None) is None
         else:
             assert member.get("profile_data", None) is not None
-        assert member["avatar_url"] is None
+        assert member["avatar_url"] is not None
 
 
 @openapi_test_function("/users/{email}:get")
@@ -666,6 +666,8 @@ def add_realm_filter(client: Client) -> int:
     request = {
         "pattern": "#(?P<id>[0-9]+)",
         "url_template": "https://github.com/zulip/zulip/issues/{id}",
+        "example_input": "#1234",
+        "reverse_template": "#{id}",
     }
     result = client.call_endpoint("/realm/filters", method="POST", request=request)
     # {code_example|end}
@@ -681,6 +683,8 @@ def update_realm_filter(client: Client, filter_id: int) -> None:
     request = {
         "pattern": "#(?P<id>[0-9]+)",
         "url_template": "https://github.com/zulip/zulip/issues/{id}",
+        "example_input": "#1234",
+        "reverse_template": "#{id}",
     }
     result = client.call_endpoint(
         url=f"/realm/filters/{filter_id}", method="PATCH", request=request
@@ -783,6 +787,22 @@ def deactivate_own_user(client: Client, owner_client: Client) -> None:
     owner_client.reactivate_user_by_id(user_id)
 
 
+@openapi_test_function("/users/me/api_key/regenerate:post")
+def regenerate_api_key(client: Client) -> None:
+    # {code_example|start}
+    # Generate a new API key for the current user/bot.
+    result = client.call_endpoint(
+        url="/users/me/api_key/regenerate",
+        method="POST",
+    )
+    # {code_example|end}
+    assert_success_response(result)
+    validate_against_openapi_schema(result, "/users/me/api_key/regenerate", "post", "200")
+
+    # Update the client with the new API key so subsequent tests don't fail.
+    client.api_key = result["api_key"]
+
+
 @openapi_test_function("/get_stream_id:get")
 def get_stream_id(client: Client) -> int:
     name = "python-test"
@@ -879,7 +899,7 @@ def get_user_groups(client: Client) -> int:
 
 @openapi_test_function("/streams/{stream_id}/members:get")
 def get_subscribers(client: Client) -> None:
-    user_ids = [11, 25]
+    user_ids = [11, 26]
     ensure_users(user_ids, ["iago", "newbie"])
     # {code_example|start}
     # Get the subscribers to a channel. Note that `client.get_subscribers`
@@ -1737,6 +1757,21 @@ def register_device(client: Client) -> None:
     validate_against_openapi_schema(result, "/register_client_device", "post", "200")
 
 
+@openapi_test_function("/remove_client_device:post")
+def remove_device(client: Client) -> None:
+    # First register a device to get a device_id.
+    result = client.call_endpoint(url="/register_client_device", method="POST")
+    device_id = result["device_id"]
+
+    # {code_example|start}
+    # Remove a registered device.
+    request = {"device_id": device_id}
+    result = client.call_endpoint(url="/remove_client_device", method="POST", request=request)
+    # {code_example|end}
+    assert_success_response(result)
+    validate_against_openapi_schema(result, "/remove_client_device", "post", "200")
+
+
 @openapi_test_function("/typing:post")
 def set_typing_status(client: Client) -> None:
     ensure_users([10, 11], ["hamlet", "iago"])
@@ -2066,6 +2101,7 @@ def test_users(client: Client, owner_client: Client) -> None:
     remove_fcm_token(client)
     register_push_device(client)
     register_device(client)
+    remove_device(client)
 
 
 def test_streams(client: Client, nonadmin_client: Client) -> None:
@@ -2150,6 +2186,7 @@ def test_the_api(client: Client, nonadmin_client: Client, owner_client: Client) 
     test_errors(client)
     test_invitations(client)
     test_welcome_bot_custom_message(client)
+    regenerate_api_key(client)
 
     sys.stdout.flush()
     if REGISTERED_TEST_FUNCTIONS != CALLED_TEST_FUNCTIONS:

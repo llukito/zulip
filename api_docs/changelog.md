@@ -20,6 +20,67 @@ format used by the Zulip server that they are interacting with.
 
 ## Changes in Zulip 12.0
 
+**Feature level 475**
+
+* [`GET /events`](/api/get-events): `realm_user` events with `op: "update"`
+  are now sent when the `date_joined` field is updated after an imported
+  stub user or a user created via the API logs in for the first time.
+* [`GET /users`](/api/get-users), [`GET /users/{user_id}`](/api/get-user),
+  [`GET /users/{email}`](/api/get-user-by-email),
+  [`GET /users/me`](/api/get-own-user): The `date_joined` field is initially
+  set to the account creation time and is updated to the time of first login
+  for imported stub users and users created via the API.
+
+**Feature level 474**
+
+* [`GET /events`](/api/get-events), [`POST /register`](/api/register-queue):
+  Removed `api_key` field from bot objects.
+* [`GET /events`](/api/get-events): `realm_bot/update` event is no longer
+  sent when a bot's api key is regenerated.
+* [`GET /events`](/api/get-events), [`POST /register`](/api/register-queue):
+  Removed `avatar_url`, `bot_type`, `email`, `full_name`, `is_active` and
+  `owner_id` fields from bot objects.
+* [`GET /events`](/api/get-events): `realm_bot/update` event is no longer
+  sent when updating a bot's avatar, email, name, or owner and also when
+  deactivating or reactivating a bot.
+
+**Feature level 473**
+
+- [`POST /users/{user_id}/status`](/api/update-status-for-user): Bots
+  with administrator permissions can now use this endpoint.
+
+**Feature level 472**
+
+* [`GET /attachments`](/api/get-attachments), [`GET /events`](/api/get-events):
+  Previously, the `messages` field in `Attachment` was array of
+  objects containing `id` and `date_sent` properties. That has been replaced
+  by a `message_ids` field, which is a flat array of message IDs.
+
+**Feature level 471**
+
+* [`GET /events`](/api/get-events), [`GET /realm/linkifiers`](/api/get-linkifiers),
+  [`POST /realm/filters`](/api/add-linkifier),
+  [`PATCH /realm/filters/{filter_id}`](/api/update-linkifier):
+  Added `example_input` and `reverse_template` to linkifier objects.
+  `example_input` is a sample string matching the url_pattern for the linkifier.
+  `reverse_template` is a string that can process input params and turn a url into
+  it's abbreviated form.
+  `reverse_template` requires `example_input` to be provided.
+  Pass an empty string during PATCH to set either of these fields back to null, given
+  they satisfy the requirements stated above.
+
+**Feature level 470**
+
+* [`POST /remove_client_device`](/api/remove-client-device):
+  Added a new endpoint to remove a registered device.
+
+**Feature level 469**
+
+* `PATCH /realm`, [`POST /register`](/api/register-queue),
+  [`GET /events`](/api/get-events): Added a new
+  `media_preview_size` realm setting that controls the size of
+  image and video thumbnails in messages.
+
 **Feature level 468**
 
 * [`POST /register_client_device`](/api/register-client-device):
@@ -286,6 +347,12 @@ element to plain escaped text.
 * [`POST /register`](/api/register-queue): Added `server_report_message_types`
   field which contains a list of supported report types for the [message
   report](/help/report-a-message) feature.
+* [`POST /message/{message_id}/report`](/api/report-message): Clients
+  that support the [message report](/help/report-a-message) feature
+  should use the `key` values in the `server_report_message_types` as the
+  valid values for the `report_type` parameter. Prior to this feature
+  level, the valid values for the `report_type` parameter were limited to:
+  `"harassment"`, `"inappropriate"`, `"norms"`, `"other"`, `"spam"`.
 
 **Feature level 434**
 
@@ -774,8 +841,9 @@ No changes; API feature level used for the Zulip 11.0 release.
 
 **Feature level 382**
 
-* `POST /message/{message_id}/report`: Added a new endpoint for submitting
-  a moderation request for a message.
+* [`POST /message/{message_id}/report`](/api/report-message): Added a new
+  endpoint for [submitting a moderation request](/help/report-a-message)
+  for a message.
 
 **Feature level 381**
 

@@ -115,6 +115,11 @@ Zulip has over 185,000 words of developer documentation. Before working on any a
   commented code using clever tricks. Comments should explain "why" when
   the reason isn't obvious, not narrate "what" the code does.
 - Comments should have a line to themself except for CSS px math.
+- **Review CSS for redundant rules.** After writing CSS, review the
+  full set of rules affecting the same elements. Look for rules that
+  are immediately overridden by a more specific selector, duplicated
+  selector lists, or cases where scoping (e.g., `:not()`) would
+  eliminate the need for an override.
 
 See: https://zulip.readthedocs.io/en/latest/contributing/code-style.html
 
@@ -171,6 +176,8 @@ Fixes #123.
 
 - `Fixes #123.` - Automatically closes the issue
 - `Fixes part of #123.` - Does not close (for partial fixes)
+- In a multi-commit PR, use `Fixes part of #123.` in earlier commits
+  and `Fixes #123.` in the final commit.
 - Never: `Partially fixes #123.` (GitHub ignores "partially")
 
 ### Rebasing Commits (Non-Interactive)
@@ -178,7 +185,11 @@ Fixes #123.
 Since `git rebase -i` requires an interactive editor, use
 `GIT_SEQUENCE_EDITOR` to supply the todo list via a script:
 
-1. **Squashing fixups into existing commits:** Create fixup commits with
+1. **Updating the HEAD commit:** If the commit you need to modify is
+   already at HEAD, just use `git commit --amend` directly. The
+   fixup+rebase workflow below is only needed for non-HEAD commits.
+
+2. **Squashing fixups into existing commits:** Create fixup commits with
    `git commit --fixup=<target-hash>`, then write a shell script that
    outputs the desired todo (with `pick` and `fixup` lines in order)
    and run:
@@ -190,7 +201,7 @@ Since `git rebase -i` requires an interactive editor, use
    Note: `--autosquash` alone without `-i` does **not** reorder or
    squash anything.
 
-2. **Rewording commit messages:** In the todo script, use `exec` lines:
+3. **Rewording commit messages:** In the todo script, use `exec` lines:
    ```
    pick <hash> Original message
    exec GIT_EDITOR=/path/to/new-msg-script.sh git commit --amend
