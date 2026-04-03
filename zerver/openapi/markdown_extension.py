@@ -27,6 +27,7 @@ from zerver.openapi.openapi import (
     Parameter,
     check_additional_imports,
     check_requires_administrator,
+    check_requires_owner,
     generate_openapi_fixture,
     get_curl_include_exclude,
     get_openapi_description,
@@ -275,7 +276,12 @@ def generate_curl_example(
     operation_entry = openapi_spec.openapi()["paths"][endpoint][method.lower()]
     global_security = openapi_spec.openapi()["security"]
 
-    insecure_operations = ["/dev_fetch_api_key:post", "/fetch_api_key:post"]
+    insecure_operations = [
+        "/dev_fetch_api_key:post",
+        "/fetch_api_key:post",
+        "/jwt/fetch_api_key:post",
+        "/dev_list_users:get",
+    ]
     lines = []
     if operation in insecure_operations:
         lines.append("```curl")
@@ -516,6 +522,7 @@ class APIHeaderPreprocessor(BasePreprocessor):
         return [
             *("# " + line for line in raw_title.splitlines()),
             *(["{!api-admin-only.md!}"] if check_requires_administrator(path, method) else []),
+            *(["{!api-owner-only.md!}"] if check_requires_owner(path, method) else []),
             "",
             f"`{method.upper()} {self.api_url}/v1{path}`",
             "",

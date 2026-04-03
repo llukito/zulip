@@ -35,6 +35,7 @@ from .configured_settings import (
     DEFAULT_RATE_LIMITING_RULES,
     EMAIL_BACKEND,
     EMAIL_HOST,
+    EMAIL_MAX_CONNECTION_LIFETIME_IN_MINUTES,
     ERROR_REPORTING,
     EXTERNAL_HOST,
     EXTERNAL_HOST_WITHOUT_PORT,
@@ -300,6 +301,9 @@ RUNNING_INSIDE_TORNADO = (
     len(sys.argv) > 1 and "manage.py" in sys.argv[0] and sys.argv[1] == "runtornado"
 )
 
+if RUNNING_INSIDE_TORNADO:
+    ROOT_URLCONF = "zproject.tornado_urls"
+
 SILENCED_SYSTEM_CHECKS = [
     # auth.W004 checks that the UserProfile field named by USERNAME_FIELD has
     # `unique=True`.  For us this is `email`, and it's unique only per-realm.
@@ -441,13 +445,6 @@ CACHES: dict[str, dict[str, object]] = {
 
 # Merge any local overrides with the default rules.
 RATE_LIMITING_RULES = {**DEFAULT_RATE_LIMITING_RULES, **RATE_LIMITING_RULES}
-
-# List of domains that, when applied to a request in a Tornado process,
-# will be handled with the separate in-memory rate limiting backend for Tornado,
-# which has its own buckets separate from the default backend.
-# In principle, it should be impossible to make requests to tornado that fall into
-# other domains, but we use this list as an extra precaution.
-RATE_LIMITING_DOMAINS_FOR_TORNADO = ["api_by_user", "api_by_ip"]
 
 # These ratelimits are also documented publicly at
 # https://zulip.readthedocs.io/en/latest/production/email-gateway.html
@@ -1239,8 +1236,11 @@ elif not EMAIL_HOST:
     WARN_NO_EMAIL = True
     EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"
 else:
-    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-
+    # Route '0' to Django's default, everything else to custom class
+    if EMAIL_MAX_CONNECTION_LIFETIME_IN_MINUTES == 0:
+        EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    else:
+        EMAIL_BACKEND = "zproject.email_backends.PersistentSMTPEmailBackend"
 EMAIL_TIMEOUT = 15
 
 if DEVELOPMENT:

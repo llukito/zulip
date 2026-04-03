@@ -114,6 +114,9 @@ Zulip has over 185,000 words of developer documentation. Before working on any a
 - Prefer writing code that is readable without explanation over heavily
   commented code using clever tricks. Comments should explain "why" when
   the reason isn't obvious, not narrate "what" the code does.
+- Use `em` units instead of `px` for computed CSS values that need to
+  scale with font size. Pixel approximations break at different zoom
+  levels and font-size settings.
 - Comments should have a line to themself except for CSS px math.
 - **Review CSS for redundant rules.** After writing CSS, review the
   full set of rules affecting the same elements. Look for rules that
@@ -143,7 +146,12 @@ coherent idea."** This is non-negotiable.
 - Mix multiple separable changes in a single commit.
 - Create a commit that "fixes" a mistake from an earlier commit in the same PR;
   always edit Git to fix the original commit.
+- Add content in one commit only to remove or move it in the next;
+  plan upfront what belongs where and do it right the first time.
 - Include debugging code, commented-out code, or temporary TODOs.
+- Leave commits that break if a later commit in the PR is dropped.
+  When a commit is flagged as potentially droppable, verify all
+  earlier commits work correctly without it.
 
 ### Commit Message Format
 
@@ -201,12 +209,17 @@ Since `git rebase -i` requires an interactive editor, use
    Note: `--autosquash` alone without `-i` does **not** reorder or
    squash anything.
 
-3. **Rewording commit messages:** In the todo script, use `exec` lines:
+3. **Rewording commit messages:** Use `git format-patch` to export
+   commits as patch files, edit the message headers in the patch
+   files, then reapply:
+
+   ```bash
+   git format-patch <base> -o /tmp/patches/
+   # Edit the commit message in each /tmp/patches/000N-*.patch file
+   # (the message is between the Subject: line and the --- line)
+   git reset --hard <base>
+   git am /tmp/patches/*.patch
    ```
-   pick <hash> Original message
-   exec GIT_EDITOR=/path/to/new-msg-script.sh git commit --amend
-   ```
-   where the message script writes the new commit message to `$1`.
 
 ## Testing Requirements
 
@@ -277,6 +290,23 @@ catches issues that automated tests miss:
   has permissions and one who does not.
 - Think about feature interactions: could banners overlap? What about
   resolved/unresolved topics? Collapsed or muted messages?
+
+### Puppeteer Visual Tests: Verifying Alignment
+
+When using Puppeteer to verify visual alignment, do not rely on
+eyeballing screenshots — especially small full-page ones. Instead:
+
+- Use `page.evaluate()` with `getBoundingClientRect()` to measure
+  actual pixel positions of the elements you need aligned, and print
+  them to the console. Compare the numbers.
+- Always take **both** a full-page screenshot and a zoomed clip of
+  the area of interest.
+- For zoomed clips, calculate the clip region from non-fixed elements;
+  fixed/sticky elements may report bounding-box positions that don't
+  match their visual location on the page.
+- Be aware that CSS nesting can scope styles to a specific parent
+  (e.g., `.parent .my-class`) — reusing the same class name in a
+  different context may not pick up the expected styles.
 
 ## Self-Review Checklist
 
@@ -351,6 +381,10 @@ faster and easier to just plan and write them well the first time.
 - Don't use `cursor.execute()` with string formatting (SQL injection risk)
 - Don't use `.extra()` in Django without careful review and commenting
 - Don't use `onclick` attributes in HTML; use event delegation
+- Don't access DOM APIs (`document.documentElement.style`, `$()`
+  selectors for specific elements) without guarding for node test
+  environments, where the DOM is mocked minimally. Check that the
+  element exists before using it.
 - Don't create N+1 query patterns:
 
   ```python
@@ -368,6 +402,10 @@ faster and easier to just plan and write them well the first time.
   fetch + rebase when starting a project so you're not using a stale branch.
   If you're continuing a project, start by rebasing, resolving merge
   conflicts carefully.
+- Don't make design or UX decisions silently. When a technical
+  constraint forces a tradeoff, present the constraint and options
+  to the user rather than picking one. Never remove features, hide
+  UI elements, or change interaction patterns without asking.
 - Don't submit code you haven't tested
 - Don't skip becoming familiar with the code you're modifying
 - Don't make claims about code behavior without verification, and
@@ -380,6 +418,10 @@ faster and easier to just plan and write them well the first time.
 ## Pull Request Guidelines
 
 ### PR Description Should:
+
+When opening a pull request, prefix the PR title with `[ai]` (e.g.,
+`[ai] compose: Fix cursor position after emoji insertion.`). Use
+`upstream/main` as the base branch.
 
 Output the PR description in a markdown code block so that formatting
 (bold, headers, checkboxes, etc.) copy-pastes correctly into GitHub.
@@ -483,14 +525,19 @@ a sidebar entry in `starlight_help/astro.config.mjs`.
 See `docs/documentation/helpcenter.md` for the full writing guide. Key points:
 
 - **Bold** UI element names (e.g., **Settings** page, **Save changes** button).
-- Do not specify default values or list out options in instructions — the user
-  can see them in the UI.
+- Do not specify default values or list out options — the user can see
+  them in the UI. For dropdowns, refer to the setting by its label name
+  rather than enumerating the choices.
 - Do not use "we" to refer to Zulip; use "you" for the reader.
 - Fewer words is better; many users have English as a second language.
 - Use `<kbd>Enter</kbd>` for keyboard keys (non-Mac; auto-translated for Mac).
+- Use `FlattenedList` to merge adjacent bullet lists (inline markdown
+  and/or include components) into a single visual list. Use
+  `FlattenedSteps` for the same purpose with ordered (numbered) lists.
 - Common components and their imports:
   ```
   import {Steps, TabItem, Tabs} from "@astrojs/starlight/components";
+  import FlattenedList from "../../components/FlattenedList.astro";
   import FlattenedSteps from "../../components/FlattenedSteps.astro";
   import NavigationSteps from "../../components/NavigationSteps.astro";
   import ZulipTip from "../../components/ZulipTip.astro";

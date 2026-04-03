@@ -16,6 +16,7 @@ import * as compose_notifications from "./compose_notifications.ts";
 import * as compose_recipient from "./compose_recipient.ts";
 import * as compose_send_menu_popover from "./compose_send_menu_popover.ts";
 import * as compose_state from "./compose_state.ts";
+import * as compose_tooltips from "./compose_tooltips.ts";
 import * as compose_ui from "./compose_ui.ts";
 import * as compose_validate from "./compose_validate.ts";
 import * as composebox_typeahead from "./composebox_typeahead.ts";
@@ -34,6 +35,7 @@ import * as resize from "./resize.ts";
 import {unresolve_name} from "./resolved_topic.ts";
 import * as rows from "./rows.ts";
 import * as scheduled_messages from "./scheduled_messages.ts";
+import {realm} from "./state_data.ts";
 import * as stream_data from "./stream_data.ts";
 import * as stream_settings_components from "./stream_settings_components.ts";
 import * as sub_store from "./sub_store.ts";
@@ -95,6 +97,9 @@ export function initialize(): void {
             if (recipient_widget_hidden) {
                 compose_validate.warn_if_topic_resolved(false);
             }
+            compose_validate.maybe_clear_stale_recipient_not_subscribed_warnings(
+                $<HTMLTextAreaElement>("textarea#compose-textarea").expectOne(),
+            );
             const compose_text_length = compose_validate.check_overflow_text(
                 $("#send_message_form"),
             );
@@ -600,6 +605,7 @@ export function initialize(): void {
 
     $("#compose").on("click", ".narrow_to_compose_recipients", (e) => {
         e.preventDefault();
+        compose_tooltips.dismiss_intro_go_to_conversation_tooltip();
         message_view.to_compose_target();
     });
 
@@ -684,11 +690,31 @@ export function initialize(): void {
         $compose_recipient.addClass("recently-focused");
     });
 
+    function handle_topic_length_limit(): void {
+        let topic = compose_state.topic();
+        if (topic.length > realm.max_topic_length) {
+            topic = topic.slice(0, realm.max_topic_length);
+            compose_state.topic(topic);
+            $("input#stream_message_recipient_topic").addClass("shake");
+        }
+    }
+
+    $("input#stream_message_recipient_topic").on("animationend", function () {
+        $(this).removeClass("shake");
+    });
+
     $("input#stream_message_recipient_topic").on("input", () => {
+        handle_topic_length_limit();
         compose_recipient.update_placeholder_visibility();
         compose_recipient.update_compose_area_placeholder_text();
     });
 
+    $("input#stream_message_recipient_topic").on("paste", () => {
+        /* setTimeout is needed to allow the pasted content to be
+            added to the input before checking the topic length limit,
+            since the paste event fires before the input value is updated.*/
+        setTimeout(handle_topic_length_limit, 0);
+    });
     $("#private_message_recipient").on("focus", () => {
         // We don't want the `.recently-focused` class removed via
         // setTimeout from the "blur" event, if we're suddenly

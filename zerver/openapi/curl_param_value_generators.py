@@ -16,11 +16,13 @@ from zerver.actions.channel_folders import check_add_channel_folder
 from zerver.actions.create_user import do_create_user
 from zerver.actions.presence import update_user_presence
 from zerver.actions.reactions import do_add_reaction
+from zerver.actions.realm_domains import do_add_realm_domain
 from zerver.actions.realm_linkifiers import do_add_linkifier
 from zerver.actions.realm_playgrounds import check_add_realm_playground
 from zerver.lib.events import do_events_register
 from zerver.lib.initial_password import initial_password
 from zerver.lib.test_classes import ZulipTestCase
+from zerver.lib.test_helpers import read_test_image_file
 from zerver.lib.upload import upload_message_attachment
 from zerver.models import Client, Message, NamedUserGroup, UserPresence
 from zerver.models.channel_folders import ChannelFolder
@@ -454,3 +456,46 @@ def regenerate_bot_api_key_test() -> dict[str, object]:
     bot = UserProfile.objects.filter(is_bot=True, realm=get_realm("zulip")).first()
     assert bot is not None
     return {"bot_id": bot.id}
+
+
+@openapi_param_value_generator(["/thumbnail/status/{realm_id_str}/{filename}:get"])
+def check_thumbnail_status_for_uploaded_file() -> dict[str, object]:
+    realm_id = ""
+    filename = ""
+    user_profile = helpers.example_user("iago")
+    url = upload_message_attachment(
+        "img.png", "image/png", read_test_image_file("img.png"), user_profile
+    )[0]
+    upload_path_parts = re.match(r"/user_uploads/(\d+)/(.*)", url)
+    if upload_path_parts:
+        realm_id = upload_path_parts[1]
+        filename = upload_path_parts[2]
+    return {"realm_id_str": realm_id, "filename": filename}
+
+
+@openapi_param_value_generator(["/realm/domains:post"])
+def add_realm_domain_owner_auth() -> dict[str, object]:
+    # This endpoint requires organization owner permissions.
+    owner = helpers.example_user("desdemona")
+    AUTHENTICATION_LINE[0] = f"{owner.email}:{owner.api_key}"
+    return {}
+
+
+@openapi_param_value_generator(["/realm/domains/{domain}:patch"])
+def patch_realm_domain_owner_auth() -> dict[str, object]:
+    # This endpoint requires organization owner permissions.
+    owner = helpers.example_user("desdemona")
+    AUTHENTICATION_LINE[0] = f"{owner.email}:{owner.api_key}"
+
+    do_add_realm_domain(owner.realm, "patch-domain-example.com", False, acting_user=None)
+    return {"domain": "patch-domain-example.com"}
+
+
+@openapi_param_value_generator(["/realm/domains/{domain}:delete"])
+def delete_realm_domain_owner_auth() -> dict[str, object]:
+    # This endpoint requires organization owner permissions.
+    owner = helpers.example_user("desdemona")
+    AUTHENTICATION_LINE[0] = f"{owner.email}:{owner.api_key}"
+
+    do_add_realm_domain(owner.realm, "delete-domain-example.com", False, acting_user=None)
+    return {"domain": "delete-domain-example.com"}

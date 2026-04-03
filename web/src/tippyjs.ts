@@ -679,6 +679,7 @@ export function initialize(): void {
         target: [
             ".custom-profile-field-value",
             ".copy-custom-profile-field-link",
+            ".copy-custom-profile-field-long-text",
             "#popover-menu-copy-email",
             ".personal-menu-clear-status",
             ".user-card-clear-status-button",
@@ -1068,6 +1069,22 @@ export function initialize(): void {
             if (stream_id && !stream_data.can_create_new_topics_in_stream(stream_id)) {
                 content = $t({defaultMessage: "Clear topic"});
             }
+            instance.setContent(content);
+        },
+        appendTo: () => document.body,
+        onHidden(instance) {
+            instance.destroy();
+        },
+    });
+
+    tippy.delegate("body", {
+        target: ".two-tier-billing-disabled",
+        delay: LONG_HOVER_DELAY,
+        onShow(instance) {
+            const content = $t(
+                {defaultMessage: "Contact {sales_email} to enable"},
+                {sales_email: "sales@zulip.com"},
+            );
             instance.setContent(content);
         },
         appendTo: () => document.body,

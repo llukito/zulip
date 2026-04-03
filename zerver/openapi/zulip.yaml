@@ -104,6 +104,114 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyResponse"
+  /jwt/fetch_api_key:
+    post:
+      operationId: jwt-fetch-api-key
+      summary: Fetch an API key (JWT)
+      tags: ["authentication"]
+      description: |
+        This API endpoint is used by clients to implement JSON Web Token
+        (JWT) authentication. Given a JWT identifying a Zulip user, it
+        returns a Zulip API key that the client can use to make requests
+        as the user.
+
+        !!! warn ""
+
+            **Note:** This endpoint is only useful for Zulip servers/organizations
+            with [JSON web token authentication][prod-jwt-auth] enabled.
+
+        See the [API keys](/api/api-keys) documentation for more details
+        on how to manage API keys manually.
+
+        **Changes**: New in Zulip 7.0 (feature level 160).
+
+        [prod-jwt-auth]: https://zulip.readthedocs.io/en/latest/production/authentication-methods.html#json-web-tokens-jwt
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                token:
+                  description: |
+                    A JSON Web Token for the target user.
+
+                    The token payload must contain a custom `email` claim with the target
+                    user's email address, e.g., `{"email": "<target user email>"}`.
+                  type: string
+                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImhhbWxldEB6dWxpcC5jb20ifQ.EsHxSVt54zPR-ywgPH54TB1FYmrGKsfq7hsQEhp_9w0"
+                include_profile:
+                  type: boolean
+                  default: false
+                  example: false
+                  description: |
+                    Whether to include a `user` object containing the target
+                    user's profile details in the response.
+              required:
+                - token
+      security: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/JsonSuccessBase"
+                  - required:
+                      - api_key
+                      - email
+                    additionalProperties: false
+                    properties:
+                      result: {}
+                      msg: {}
+                      ignored_parameters_unsupported: {}
+                      api_key:
+                        type: string
+                        description: |
+                          The API key that can be used to authenticate as the requested user.
+                      email:
+                        type: string
+                        description: |
+                          The email address of the user who owns the API key.
+                      user:
+                        description: |
+                          Only present if `include_profile` parameter was set to `true`.
+
+                          A dictionary with data on the target user.
+                        allOf:
+                          - $ref: "#/components/schemas/UserBase"
+                          - additionalProperties: false
+                            properties:
+                              user_id: {}
+                              delivery_email:
+                                nullable: true
+                              email: {}
+                              full_name: {}
+                              date_joined: {}
+                              is_active: {}
+                              is_owner: {}
+                              is_admin: {}
+                              is_guest: {}
+                              is_bot: {}
+                              bot_type:
+                                nullable: true
+                              bot_owner_id:
+                                nullable: true
+                              role: {}
+                              timezone: {}
+                              avatar_url:
+                                nullable: true
+                              avatar_version: {}
+                              is_imported_stub: {}
+                    example:
+                      {
+                        "api_key": "gjA04ZYcqXKalvYMA8OeXSfzUOLrtbZv",
+                        "email": "hamlet@zulip.com",
+                        "msg": "",
+                        "result": "success",
+                      }
   /dev_fetch_api_key:
     post:
       operationId: dev-fetch-api-key
@@ -143,6 +251,89 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyResponse"
+  /dev_list_users:
+    get:
+      operationId: dev-list-users
+      summary: List users (development only)
+      tags:
+        - authentication
+      description: |
+        Get a list of all, non-bot users in a [Zulip development
+        server](https://zulip.readthedocs.io/en/latest/development/overview.html).
+        This endpoint is used by mobile developers to fetch users for the
+        development login flow.
+
+        !!! warn ""
+
+            **Note:** This endpoint is only available on Zulip development
+            servers; for obvious security reasons it will always return an error
+            in a Zulip production server.
+      security: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/JsonSuccessBase"
+                  - type: object
+                    additionalProperties: false
+                    properties:
+                      result: {}
+                      msg: {}
+                      ignored_parameters_unsupported: {}
+                      direct_admins:
+                        type: array
+                        description: |
+                          A list of administrators in the development server.
+                        items:
+                          type: object
+                          additionalProperties: false
+                          properties:
+                            email:
+                              type: string
+                              description: |
+                                The email of the dev admin user.
+                            realm_url:
+                              type: string
+                              description: |
+                                The URL of the dev admin user's organization.
+                      direct_users:
+                        type: array
+                        description: |
+                          A list of non-admin users in the development server.
+                        items:
+                          type: object
+                          additionalProperties: false
+                          properties:
+                            email:
+                              type: string
+                              description: |
+                                The email of the dev user.
+                            realm_url:
+                              type: string
+                              description: |
+                                The URL of the dev user's organization.
+                    example:
+                      {
+                        "msg": "",
+                        "result": "success",
+                        "direct_admins":
+                          [
+                            {
+                              "email": "iago@zulip.com",
+                              "realm_url": http://localhost:9991,
+                            },
+                          ],
+                        "direct_users":
+                          [
+                            {
+                              "email": "hamlet@zulip.com",
+                              "realm_url": http://localhost:9991,
+                            },
+                          ],
+                      }
   /events:
     get:
       operationId: get-events
@@ -156,8 +347,8 @@ paths:
         `event_queue_longpoll_timeout_seconds` property returned by
         `POST /register` as the client-side HTTP request timeout for
         calls to this endpoint. It is guaranteed to be higher than
-        heartbeat frequency and should be respected by clients to
-        avoid breaking when heartbeat frequency increases.
+        heartbeat timeout and should be respected by clients to
+        avoid breaking when heartbeat timeout increases.
       x-curl-examples-parameters:
         oneOf:
           - type: include
@@ -250,17 +441,15 @@ paths:
                                 }
                             - type: object
                               description: |
-                                Event sent to a user's clients when that user's settings
-                                have changed.
+                                Event sent to a user's clients when that user's settings have changed.
 
-                                **Changes**: The `update_display_settings` and `update_global_notifications`
-                                legacy event types that had been deprecated in Zulip 5.0 (feature level 89)
-                                were removed entirely in Zulip 12.0 (feature level 439). All clients should
-                                be using the `user_settings` event type to access user settings.
+                                **Changes**: In Zulip 12.0 (feature level 439), the deprecated, legacy
+                                `update_display_settings` and `update_global_notifications` event types
+                                were removed entirely. All clients should be using this event type for
+                                updates to a user's settings.
 
-                                New in Zulip 5.0 (feature level 89), replacing the
-                                previous `update_display_settings` and `update_global_notifications`
-                                event types, which are still present for backwards compatibility reasons.
+                                New in Zulip 5.0 (feature level 89), replaced and deprecated the
+                                `update_display_settings` and `update_global_notifications` event types.
                               properties:
                                 id:
                                   $ref: "#/components/schemas/EventIdSchema"
@@ -4044,6 +4233,19 @@ paths:
                                           `{{ "{{/}}" }}` can be used for literal `{/}` characters.
 
                                           **Changes**: New in Zulip 12.0 (feature level 471).
+                                      alternative_url_templates:
+                                        type: array
+                                        items:
+                                          type: string
+                                        description: |
+                                          An array of additional [RFC 6570][rfc6570] compliant URL
+                                          template strings that are used for reverse linkification
+                                          (converting pasted URLs to linkifier pattern text). These
+                                          templates have no effect on forward linkification.
+
+                                          [rfc6570]: https://www.rfc-editor.org/rfc/rfc6570.html
+
+                                          **Changes**: New in Zulip 12.0 (feature level e2b257).
                               example:
                                 {
                                   "type": "realm_linkifiers",
@@ -4055,6 +4257,10 @@ paths:
                                         "id": 1,
                                         "example_input": "#1234",
                                         "reverse_template": "#{id}",
+                                        "alternative_url_templates":
+                                          [
+                                            "https://realm.com/my_realm_filter/issue/{id}",
+                                          ],
                                       },
                                     ],
                                   "id": 0,
@@ -4195,9 +4401,9 @@ paths:
                             - type: object
                               additionalProperties: false
                               description: |
-                                Event sent to all users in a Zulip organization when the set of
-                                [allowed domains for new users](/help/restrict-account-creation#configuring-email-domain-restrictions)
-                                has changed.
+                                Event sent to all users in a Zulip organization when a new domain has been
+                                added to the set of [allowed domains for account creation and email
+                                changes](/help/restrict-account-creation#configuring-email-domain-restrictions).
                               properties:
                                 id:
                                   $ref: "#/components/schemas/EventIdSchema"
@@ -4211,7 +4417,10 @@ paths:
                                   enum:
                                     - add
                                 realm_domain:
-                                  $ref: "#/components/schemas/RealmDomain"
+                                  allOf:
+                                    - $ref: "#/components/schemas/RealmDomain"
+                                    - description: |
+                                        Object containing details of the newly added domain.
                               example:
                                 {
                                   "type": "realm_domains",
@@ -4227,7 +4436,8 @@ paths:
                               additionalProperties: false
                               description: |
                                 Event sent to all users in a Zulip organization when the set of
-                                [allowed domains for new users](/help/restrict-account-creation#configuring-email-domain-restrictions)
+                                [allowed domains for account creation and email
+                                changes](/help/restrict-account-creation#configuring-email-domain-restrictions)
                                 has changed.
                               properties:
                                 id:
@@ -4242,19 +4452,10 @@ paths:
                                   enum:
                                     - change
                                 realm_domain:
-                                  type: object
-                                  additionalProperties: false
-                                  description: |
-                                    Object containing details of the edited domain.
-                                  properties:
-                                    domain:
-                                      type: string
-                                      description: |
-                                        The domain whose settings have changed.
-                                    allow_subdomains:
-                                      type: boolean
-                                      description: |
-                                        Whether subdomains are allowed for this domain.
+                                  allOf:
+                                    - $ref: "#/components/schemas/RealmDomain"
+                                    - description: |
+                                        Object containing details of the edited domain.
                               example:
                                 {
                                   "type": "realm_domains",
@@ -4269,9 +4470,9 @@ paths:
                             - type: object
                               additionalProperties: false
                               description: |
-                                Event sent to all users in a Zulip organization when the set of
-                                [allowed domains for new users](/help/restrict-account-creation#configuring-email-domain-restrictions)
-                                has changed.
+                                Event sent to all users in a Zulip organization when a domain has been
+                                removed from the set of [allowed domains for account creation and email
+                                changes](/help/restrict-account-creation#configuring-email-domain-restrictions).
                               properties:
                                 id:
                                   $ref: "#/components/schemas/EventIdSchema"
@@ -5714,6 +5915,14 @@ paths:
                                         Maximum length is 8000 Unicode code points.
 
                                         **Changes**: New in Zulip 11.0 (feature level 416).
+                                    workplace_users_group:
+                                      allOf:
+                                        - description: |
+                                            A [group-setting value](/api/group-setting-values) defining the set of
+                                            users who will be considered as workplace users for billing.
+
+                                            **Changes**: New in Zulip 12.0 (feature level 477).
+                                        - $ref: "#/components/schemas/GroupSettingValue"
                                     zulip_update_announcements_stream_id:
                                       type: integer
                                       description: |
@@ -10495,6 +10704,59 @@ paths:
                         "url": "/user_uploads/1/4e/m2A3MSqFnWRLUf9SaPzQ0Up_/zulip.txt",
                         "filename": "zulip.txt",
                       }
+  /thumbnail/status/{realm_id_str}/{filename}:
+    get:
+      operationId: check-thumbnail-status
+      summary: Check thumbnail status
+      tags: ["messages"]
+      description: |
+        Check whether a thumbnail exists for a specific file uploaded by a user.
+        This endpoint is intended to be polled by clients to determine when
+        thumbnail generation is complete.
+
+        **Changes**: New in Zulip 12.0 (feature level 479).
+      parameters:
+        - name: realm_id_str
+          in: path
+          description: |
+            The realm ID component of the file's `path_id`. If the `path_id` is
+            `1/4e/m2A3MSqFnWRLUf9SaPzQ0Up_/zulip.txt`, the `realm_id_str` would be `1`.
+          schema:
+            type: integer
+          example: 1
+          required: true
+        - name: filename
+          in: path
+          description: |
+            The file path component of the file's `path_id` (everything
+            after the first `/`). If the `path_id` is
+            `1/4e/m2A3MSqFnWRLUf9SaPzQ0Up_/zulip.txt`, the `filename`
+            would be `4e/m2A3MSqFnWRLUf9SaPzQ0Up_/zulip.txt`.
+          schema:
+            type: string
+          example: 4e/m2A3MSqFnWRLUf9SaPzQ0Up_/zulip.txt
+          required: true
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/JsonSuccessBase"
+                  - additionalProperties: false
+                    properties:
+                      result: {}
+                      msg: {}
+                      ignored_parameters_unsupported: {}
+                      has_thumbnail:
+                        type: boolean
+                        description: |
+                          A boolean indicating whether the thumbnail exists.
+                    required:
+                      - has_thumbnail
+                    example:
+                      {"msg": "", "result": "success", "has_thumbnail": true}
   /user_uploads/{realm_id_str}/{filename}:
     get:
       operationId: get-file-temporary-url
@@ -10515,7 +10777,8 @@ paths:
         - name: realm_id_str
           in: path
           description: |
-            The ID of the Zulip organization.
+            The realm ID component of the file's `path_id`. If the `path_id` is
+            `1/4e/m2A3MSqFnWRLUf9SaPzQ0Up_/zulip.txt`, the `realm_id_str` would be `1`.
           schema:
             type: integer
           example: 1
@@ -10523,7 +10786,10 @@ paths:
         - name: filename
           in: path
           description: |
-            Path to the [uploaded file](/api/upload-file).
+            The file path component of the file's `path_id` (everything
+            after the first `/`). If the `path_id` is
+            `1/4e/m2A3MSqFnWRLUf9SaPzQ0Up_/zulip.txt`, the `filename`
+            would be `4e/m2A3MSqFnWRLUf9SaPzQ0Up_/zulip.txt`.
           schema:
             type: string
           example: 4e/m2A3MSqFnWRLUf9SaPzQ0Up_/zulip.txt
@@ -11274,7 +11540,7 @@ paths:
                           **Changes**: New in Zulip 12.0 (feature level 433).
                         example: false
                       profile_data:
-                        $ref: "#/components/schemas/profile_data"
+                        $ref: "#/components/schemas/ProfileData"
                     example:
                       {
                         "avatar_url": "https://secure.gravatar.com/avatar/af4f06322c177ef4e1e9b2c424986b54?d=identicon&version=1",
@@ -12042,6 +12308,9 @@ paths:
         [bot](/help/bots-overview#bot-type) will only have access to messages
         sent after the bot was subscribed to the channel, instead of when the
         user subscribed.
+
+        **Changes**: Before Zulip 12.0 (feature level 480), this
+        endpoint was not supported for archived channels.
       parameters:
         - $ref: "#/components/parameters/ChannelIdInPath"
         - name: allow_empty_topic_name
@@ -14021,6 +14290,174 @@ paths:
                         "result": "success",
                         "server_timestamp": 1656958539.6287155,
                       }
+  /realm/domains:
+    get:
+      operationId: get-realm-domains
+      summary: Get allowed domains
+      tags: ["server_and_organizations"]
+      description: |
+        Get the set of allowed domains configured in the organization for user
+        account email addresses.
+
+        As each Zulip user account is associated with an email address, organization
+        owners can [restrict new account creation (and email
+        changes)](/help/restrict-account-creation) to email addresses with these
+        domains.
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/JsonSuccessBase"
+                  - additionalProperties: false
+                    properties:
+                      result: {}
+                      msg: {}
+                      ignored_parameters_unsupported: {}
+                      domains:
+                        type: array
+                        description: |
+                          A list of objects containing details of each domain allowed
+                          for user account email addresses.
+                        items:
+                          $ref: "#/components/schemas/RealmDomain"
+                    example:
+                      {
+                        "result": "success",
+                        "msg": "",
+                        "domains":
+                          [
+                            {
+                              "domain": "example.com",
+                              "allow_subdomains": false,
+                            },
+                          ],
+                      }
+    post:
+      operationId: add-realm-domain
+      summary: Add an allowed domain
+      tags: ["server_and_organizations"]
+      description: |
+        Add a domain to the set of allowed domains configured in the organization
+        for [user account email addresses](/help/restrict-account-creation).
+
+        **Changes**: Prior to Zulip 6.0 (feature level 143), organization
+        administrators who were not owners could access this endpoint.
+      x-requires-owner: true
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                domain:
+                  description: |
+                    The new domain.
+
+                    **Changes**: In Zulip 4.0 (feature level 63), the unnecessary
+                    JSON-encoding of this parameter was removed.
+                  type: string
+                  example: "example.com"
+                allow_subdomains:
+                  description: |
+                    Whether subdomains are allowed for this domain.
+                  type: boolean
+                  example: false
+              required:
+                - domain
+                - allow_subdomains
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/JsonSuccessBase"
+                  - additionalProperties: false
+                    properties:
+                      result: {}
+                      msg: {}
+                      ignored_parameters_unsupported: {}
+                      new_domain:
+                        type: array
+                        description: |
+                          An array containing the ID of the newly added domain
+                          and the submitted domain name string.
+                        items:
+                          oneOf:
+                            - type: integer
+                            - type: string
+                    example:
+                      {
+                        "result": "success",
+                        "msg": "",
+                        "new_domain": [1, "example.com"],
+                      }
+  /realm/domains/{domain}:
+    patch:
+      operationId: patch-realm-domain
+      summary: Update an allowed domain
+      tags: ["server_and_organizations"]
+      description: |
+        Update whether subdomains are allowed in [user account email
+        addresses](/help/restrict-account-creation) for the specified domain.
+
+        **Changes**: Prior to Zulip 6.0 (feature level 143), organization
+        administrators who were not owners could access this endpoint.
+      x-requires-owner: true
+      parameters:
+        - name: domain
+          in: path
+          description: |
+            The domain to update.
+          schema:
+            type: string
+            example: "example.com"
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                allow_subdomains:
+                  description: |
+                    Whether subdomains are allowed for this domain.
+                  type: boolean
+                  example: true
+              required:
+                - allow_subdomains
+      responses:
+        "200":
+          $ref: "#/components/responses/SimpleSuccess"
+    delete:
+      operationId: delete-realm-domain
+      summary: Remove an allowed domain
+      tags: ["server_and_organizations"]
+      description: |
+        Remove the specified domain from the set of allowed domains configured in
+        the organization for [user account email addresses](/help/restrict-account-creation).
+
+        **Changes**: Prior to Zulip 6.0 (feature level 143), organization
+        administrators who were not owners could access this endpoint.
+      x-requires-owner: true
+      parameters:
+        - name: domain
+          in: path
+          description: |
+            The domain to remove.
+          schema:
+            type: string
+            example: "example.com"
+          required: true
+      responses:
+        "200":
+          $ref: "#/components/responses/SimpleSuccess"
   /realm/profile_fields:
     get:
       operationId: get-custom-profile-fields
@@ -14252,15 +14689,17 @@ paths:
                     user's profile (or in a more easily accessible "small profile").
 
                     At most 2 profile fields may have this property be true in a given
-                    organization. The "Paragraph" [profile field types][profile-field-types]
-                    profile field types cannot be selected to be displayed in profile summaries.
+                    organization.
 
-                    The "Person picker" profile field is also not supported, but that is likely to
+                    The "Person picker" profile field is not supported, but that is likely to
                     be temporary.
 
                     [profile-field-types]: /help/custom-profile-fields#profile-field-types
 
-                    **Changes**: New in Zulip 6.0 (feature level 146).
+                    **Changes**: Before Zulip 12.0 (feature level 476), the
+                    "Paragraph" field type was not supported.
+
+                    New in Zulip 6.0 (feature level 146).
                   type: boolean
                   example: true
                 required:
@@ -15060,17 +15499,21 @@ paths:
   /users/me/subscriptions/properties:
     post:
       operationId: update-subscription-settings
-      summary: Update subscription settings
+      summary: Bulk update subscription settings
       tags: ["channels"]
       description: |
-        This endpoint is used to update the user's personal settings for the
-        channels they are subscribed to, including muting, color, pinning, and
-        per-channel notification settings.
+        Update the current user's personal settings for channels they are
+        subscribed to. These settings include [color](/help/change-the-color-of-a-channel),
+        [muting](/help/mute-a-channel), [pinning](/help/pin-a-channel)
+        and [per-channel notification settings](/help/channel-notifications).
 
-        **Changes**: Prior to Zulip 5.0 (feature level 111), response
-        object included the `subscription_data` in the
-        request. The endpoint now returns the more ergonomic
-        [`ignored_parameters_unsupported`][ignored-parameters] array instead.
+        There is a single channel alternative to this bulk endpoint:
+        [`POST /users/me/subscriptions/{stream_id}`](/api/update-subscription-property).
+
+        **Changes**: Prior to Zulip 5.0 (feature level 111), the response object
+        included the `subscription_data` in the request. The endpoint now returns
+        the more ergonomic [`ignored_parameters_unsupported`][ignored-parameters]
+        array instead.
 
         [ignored-parameters]: /api/rest-error-handling#ignored-parameters
       requestBody:
@@ -15096,61 +15539,9 @@ paths:
                         description: |
                           The unique ID of a channel.
                       property:
-                        type: string
-                        enum:
-                          - color
-                          - is_muted
-                          - in_home_view
-                          - pin_to_top
-                          - desktop_notifications
-                          - audible_notifications
-                          - push_notifications
-                          - email_notifications
-                          - wildcard_mentions_notify
-                        description: |
-                          One of the channel properties described below:
-
-                          - `"color"`: The hex value of the user's display color for the channel.
-
-                          - `"is_muted"`: Whether the channel is [muted](/help/mute-a-channel).<br>
-                            **Changes**: As of Zulip 6.0 (feature level 139), updating either
-                            `"is_muted"` or `"in_home_view"` generates two [subscription update
-                            events](/api/get-events#subscription-update), one for each property,
-                            that are sent to clients. Prior to this feature level, updating either
-                            property only generated a subscription update event for
-                            `"in_home_view"`. <br>
-                            Prior to Zulip 2.1.0, this feature was represented
-                            by the more confusingly named `"in_home_view"` (with the
-                            opposite value: `in_home_view=!is_muted`); for
-                            backwards-compatibility, modern Zulip still accepts that property.
-
-                          - `"pin_to_top"`: Whether to pin the channel at the top of the channel list.
-
-                          - `"desktop_notifications"`: Whether to show desktop notifications
-                            for all messages sent to the channel.
-
-                          - `"audible_notifications"`: Whether to play a sound
-                            notification for all messages sent to the channel.
-
-                          - `"push_notifications"`: Whether to trigger a mobile push
-                            notification for all messages sent to the channel.
-
-                          - `"email_notifications"`: Whether to trigger an email
-                            notification for all messages sent to the channel.
-
-                          - `"wildcard_mentions_notify"`: Whether wildcard mentions trigger
-                            notifications as though they were personal mentions in this channel.
+                        $ref: "#/components/schemas/SubscriptionProperty"
                       value:
-                        oneOf:
-                          - type: boolean
-                          - type: string
-                        description: |
-                          The new value of the property being modified.
-
-                          If the property is `"color"`, then `value` is a string
-                          representing the hex value of the user's display
-                          color for the channel. For all other above properties,
-                          `value` is a boolean.
+                        $ref: "#/components/schemas/SubscriptionPropertyValue"
                     required:
                       - stream_id
                       - property
@@ -15170,6 +15561,38 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/SuccessIgnoredParameters"
+  /users/me/subscriptions/{stream_id}:
+    patch:
+      operationId: update-subscription-property
+      summary: Update a subscription setting
+      tags: ["channels"]
+      description: |
+        Update the current user's personal settings for a specific channel they
+        are subscribed to. These settings include [color](/help/change-the-color-of-a-channel),
+        [muting](/help/mute-a-channel), [pinning](/help/pin-a-channel)
+        and [per-channel notification settings](/help/channel-notifications).
+
+        This is a single channel alternative to the bulk endpoint:
+        [`POST /users/me/subscriptions/properties`](/api/update-subscription-settings).
+      parameters:
+        - $ref: "#/components/parameters/ChannelIdInPath"
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                property:
+                  $ref: "#/components/schemas/SubscriptionProperty"
+                value:
+                  $ref: "#/components/schemas/SubscriptionPropertyValue"
+              required:
+                - property
+                - value
+      responses:
+        "200":
+          $ref: "#/components/responses/SimpleSuccess"
   /users/{email}:
     get:
       operationId: get-user-by-email
@@ -15647,6 +16070,19 @@ paths:
                                 `{{ "{{/}}" }}` can be used for literal `{/}` characters.
 
                                 **Changes**: New in Zulip 12.0 (feature level 471).
+                            alternative_url_templates:
+                              type: array
+                              items:
+                                type: string
+                              description: |
+                                An array of additional [RFC 6570][rfc6570] compliant URL
+                                template strings that are used for reverse linkification
+                                (converting pasted URLs to linkifier pattern text). These
+                                templates have no effect on forward linkification.
+
+                                [rfc6570]: https://www.rfc-editor.org/rfc/rfc6570.html
+
+                                **Changes**: New in Zulip 12.0 (feature level e2b257).
                     example:
                       {
                         "msg": "",
@@ -15658,6 +16094,8 @@ paths:
                               "id": 1,
                               "example_input": "#1234",
                               "reverse_template": "#{id}",
+                              "alternative_url_templates":
+                                ["https://github.com/zulip/zulip/pull/{id}"],
                             },
                           ],
                         "result": "success",
@@ -15742,9 +16180,26 @@ paths:
                     back to us.
 
                     **Changes**: New in Zulip 12.0 (feature level 471).
+                alternative_url_templates:
+                  type: array
+                  items:
+                    type: string
+                  example: ["https://github.com/zulip/zulip/pull/{id}"]
+                  description: |
+                    An array of additional [RFC 6570][rfc6570] compliant URL
+                    template strings that are used for reverse linkification
+                    (converting pasted URLs to linkifier pattern text). These
+                    templates have no effect on forward linkification.
+
+                    [rfc6570]: https://www.rfc-editor.org/rfc/rfc6570.html
+
+                    **Changes**: New in Zulip 12.0 (feature level e2b257).
               required:
                 - pattern
                 - url_template
+            encoding:
+              alternative_url_templates:
+                contentType: application/json
       responses:
         "200":
           description: Success.
@@ -15841,9 +16296,26 @@ paths:
                     `{{ "{{/}}" }}` can be used for literal `{/}` characters.
 
                     **Changes**: New in Zulip 12.0 (feature level 471).
+                alternative_url_templates:
+                  type: array
+                  items:
+                    type: string
+                  example: ["https://github.com/zulip/zulip/pull/{id}"]
+                  description: |
+                    An array of additional [RFC 6570][rfc6570] compliant URL
+                    template strings that are used for reverse linkification
+                    (converting pasted URLs to linkifier pattern text). These
+                    templates have no effect on forward linkification.
+
+                    [rfc6570]: https://www.rfc-editor.org/rfc/rfc6570.html
+
+                    **Changes**: New in Zulip 12.0 (feature level e2b257).
               required:
                 - pattern
                 - url_template
+            encoding:
+              alternative_url_templates:
+                contentType: application/json
       responses:
         "200":
           $ref: "#/components/responses/SimpleSuccess"
@@ -16809,12 +17281,12 @@ paths:
         ["events" endpoint](/api/get-events) to request events from
         the Zulip server using long-polling.
 
-        The server will queue events for up to 10 minutes of inactivity.
-        After 10 minutes, your event queue will be garbage-collected. The
-        server will send `heartbeat` events every minute, which makes it easy
-        to implement a robust client that does not miss events unless the
-        client loses network connectivity with the Zulip server for 10 minutes
-        or longer.
+        The server will queue events for up to `idle_queue_timeout_secs`
+        seconds of inactivity. After that timeout, your event queue will be
+        garbage-collected. The server will send `heartbeat` events
+        every minute, which makes it easy to implement a robust client that
+        does not miss events unless the client loses network connectivity
+        with the Zulip server for longer than the configured timeout.
 
         Once the server garbage-collects your event queue, the server will
         [return an error](/api/get-events#bad_event_queue_id-errors)
@@ -16822,7 +17294,7 @@ paths:
         the event queue. Your software will need to handle that error
         condition by re-initializing itself (e.g. this is what triggers your
         browser reloading the Zulip web app when your laptop comes back online
-        after being offline for more than 10 minutes).
+        after being offline for more than `idle_queue_timeout_secs` seconds).
 
         When prototyping with this API, we recommend first calling `register`
         with no `event_types` parameter to see all the available data from all
@@ -16837,7 +17309,12 @@ paths:
         works, avoids clients needing to worry about large classes of
         potentially messy races, etc.
 
-        **Changes**: Removed `dense_mode` setting in Zulip 10.0 (feature level 364)
+        **Changes**: New in Zulip 12.0 (feature level 481),
+        the `idle_queue_timeout` request parameter and `idle_queue_timeout_secs`
+        response field were added to allow clients to configure
+        how long the server keeps an event queue alive during inactivity.
+
+        Removed `dense_mode` setting in Zulip 10.0 (feature level 364)
         as we now have `web_font_size_px` and `web_line_height_percent`
         settings for more control.
 
@@ -17007,20 +17484,22 @@ paths:
                       for backwards-compatibility; it will be required in a
                       future server release.
 
-                    - `user_settings_object`: Has no effect with modern servers. Previously, this
-                      was a boolean for whether the client supported the modern `user_settings` event type.
+                    - `user_settings_object`: Has no effect with modern servers. Previously,
+                      this was a boolean for whether the client supported the modern
+                      [`user_settings` event type](/api/get-events#user_settings-update) and
+                      the top-level `user_settings` object in this endpoint's response.
                       <br />
-                      **Changes**: Prior to Zulip 12.0 (feature level 439), if false, the server
-                      would additionally send the legacy `update_global_notifications` and
-                      `update_display_settings` event types if requested.
-
-                      New in Zulip 5.0 (feature level 89). Because the feature level 89 API changes
-                      were merged together, clients can safely make a request with this client
-                      capability and also request all three event types (`user_settings`,
-                      `update_display_settings`, `update_global_notifications`), and get exactly one
-                      copy of settings data on any server version. Clients can then use the
-                      `zulip_feature_level` in the `/register` response or the presence/absence of a
-                      `user_settings` key to determine where to look for the data.
+                      **Changes**: Prior to Zulip 12.0 (feature level 439), if false, the
+                      server would additionally send the legacy `update_global_notifications`
+                      and `update_display_settings` event types, if requested.
+                      <br />
+                      New in Zulip 5.0 (feature level 89). Because the feature level 89 API
+                      changes were merged together, clients could safely make a request with
+                      this client capability, and also request all three event types
+                      (`user_settings`, `update_display_settings`, and
+                      `update_global_notifications`), and then use the `zulip_feature_level`
+                      in this endpoint's response or the presence/absence of a `user_settings`
+                      key to determine where to look for the data.
 
                     - `linkifier_url_template`: Boolean for whether the client accepts
                       [linkifiers][help-linkifiers] that use [RFC 6570][rfc6570] compliant
@@ -17099,6 +17578,28 @@ paths:
                   example: ["message"]
                 narrow:
                   $ref: "#/components/schemas/Narrow"
+                idle_queue_timeout:
+                  description: |
+                    At least how long (in seconds) the server should keep the event
+                    queue alive when the client is not polling. If the client does
+                    not poll before this timeout, the queue will eventually be
+                    garbage-collected.
+
+                    Alternatively, the string `"mobile"` can be passed to use the
+                    server's recommended timeout for mobile clients. This is
+                    currently 12 hours, but may change in the future.
+
+                    If not specified, the server uses a default of 10 minutes. The
+                    maximum allowed value is 7 days.
+
+                    **Changes**: New in Zulip 12.0 (feature level 481).
+                  oneOf:
+                    - type: integer
+                      minimum: 1
+                    - type: string
+                      enum:
+                        - "mobile"
+                  example: 3600
             encoding:
               apply_markdown:
                 contentType: application/json
@@ -17113,6 +17614,8 @@ paths:
               client_capabilities:
                 contentType: application/json
               fetch_event_types:
+                contentType: application/json
+              idle_queue_timeout:
                 contentType: application/json
               narrow:
                 contentType: application/json
@@ -17137,6 +17640,18 @@ paths:
 
                           Will be `null` only for unauthenticated access in realms that have
                           enabled the [public access option](/help/public-access-option).
+                      idle_queue_timeout_secs:
+                        type: integer
+                        description: |
+                          The effective idle queue timeout for the allocated queue,
+                          in seconds. This is the resolved value of the
+                          `idle_queue_timeout` request parameter, after applying
+                          defaults and server-side limits.
+
+                          Not present for unauthenticated access in realms that have
+                          enabled the [public access option](/help/public-access-option).
+
+                          **Changes**: New in Zulip 12.0 (feature level 481).
                       last_event_id:
                         type: integer
                         description: |
@@ -17592,8 +18107,8 @@ paths:
                         description: |
                           Present if `realm_domains` is present in `fetch_event_types`.
 
-                          An array of dictionaries where each dictionary describes a domain within
-                          which users can join the organization without and invitation.
+                          An array of dictionaries where each dictionary describes an allowed domain
+                          for [user account email addresses](/help/restrict-account-creation).
                         items:
                           $ref: "#/components/schemas/RealmDomain"
                       realm_emoji:
@@ -18233,22 +18748,22 @@ paths:
 
                           A dictionary containing the user's personal settings.
 
-                          **Changes**: Removed duplicate copies of many of these settings from the
-                          top-level object in Zulip 12.0 (feature level 439). Previously,
-                          clients that did not include `user_settings_object` in their
-                          [`client_capabilities`][capabilities] and included
-                          `update_display_settings` or `update_global_notifications` in
-                          `fetch_event_types` would receive the settings that predated feature level
-                          89 in the top-level response.
+                          **Changes**: In Zulip 12.0 (feature level 439), removed deprecated,
+                          duplicate copies of many of these user settings from the top-level object.
+                          Previously, clients that did not include the `user_settings_object`
+                          [client capability][client-capabilities] and included `update_display_settings`
+                          or `update_global_notifications` in `fetch_event_types` would receive those
+                          user settings that predated feature level 89 in the top-level response.
 
-                          Removed `dense_mode` setting in Zulip 10.0 (feature level 364) as we now
-                          have `web_font_size_px` and `web_line_height_percent` settings for more
-                          control.
+                          In Zulip 10.0 (feature level 364), removed the `dense_mode` setting as we
+                          now have `web_font_size_px` and `web_line_height_percent` settings for
+                          more control.
 
-                          New in Zulip 5.0 (feature level 89). Previously, these
-                          settings appeared in the top-level object, where they are
-                          available for clients without the `user_settings_object` client
-                          capability for backwards-compatibility.
+                          New in Zulip 5.0 (feature level 89). Previously, user settings appeared
+                          in the top-level object; see the `user_settings_object`
+                          [client capability][client-capabilities] for backwards-compatibility.
+
+                          [client-capabilities]: /api/register-queue#parameter-client_capabilities
                         additionalProperties: false
                         properties:
                           twenty_four_hour_time:
@@ -19890,6 +20405,16 @@ paths:
 
                           - "G" means generated by Gravatar (the default).
                           - "U" means uploaded by an organization administrator.
+                      realm_workplace_users_group:
+                        allOf:
+                          - $ref: "#/components/schemas/GroupSettingValue"
+                          - description: |
+                              Present if `realm` is present in `fetch_event_types`.
+
+                              A [group-setting value](/api/group-setting-values) defining the set of
+                              users who will be considered as workplace users for billing.
+
+                              **Changes**: New in Zulip 12.0 (feature level 477).
                       max_icon_file_size_mib:
                         type: integer
                         description: |
@@ -20509,8 +21034,8 @@ paths:
                           Present if `realm` is present in `fetch_event_types`.
 
                           Recommended client-side HTTP request timeout for [`GET /events`](/api/get-events) calls.
-                          This is guaranteed to be somewhat greater than the heartbeat frequency. It is important
-                          that clients respect this parameter, so that increases in the heartbeat frequency do not
+                          This is guaranteed to be somewhat greater than the heartbeat timeout. It is important
+                          that clients respect this parameter, so that increases in the heartbeat timeout do not
                           break clients.
 
                           **Changes**: New in Zulip 5.0 (feature level 74). Previously,
@@ -21377,7 +21902,6 @@ paths:
                                 avatar_url:
                                   nullable: true
                                 avatar_version: {}
-                                profile_data: {}
                                 is_imported_stub: {}
                       server_report_message_types:
                         description: |
@@ -21455,6 +21979,7 @@ paths:
                         "last_event_id": -1,
                         "msg": "",
                         "queue_id": "fb67bf8a-c031-47cc-84cf-ed80accacda8",
+                        "idle_queue_timeout_secs": 600,
                         "realm_emoji":
                           {
                             "1":
@@ -22736,6 +23261,9 @@ paths:
       tags: ["channels"]
       description: |
         Get all users subscribed to a channel.
+
+        **Changes**: Before Zulip 12.0 (feature level 480), this
+        endpoint was not supported for archived channels.
       parameters:
         - $ref: "#/components/parameters/ChannelIdInPath"
       responses:
@@ -23049,7 +23577,10 @@ paths:
       description: |
         Fetch details for the channel with the ID `stream_id`.
 
-        **Changes**: New in Zulip 6.0 (feature level 132).
+        **Changes**: Before Zulip 12.0 (feature level 480), this
+        endpoint was not supported for archived channels.
+
+        New in Zulip 6.0 (feature level 132).
       parameters:
         - $ref: "#/components/parameters/ChannelIdInPath"
       responses:
@@ -26537,12 +27068,15 @@ components:
           description: |
             Whether the custom profile field, display or not on the user card.
 
-            Must be false for `Paragraph` and `Person picker`
+            Must be false for `Person picker`
             [profile field types](/help/custom-profile-fields#profile-field-types).
 
             This field is only included when its value is `true`.
 
-            **Changes**: New in Zulip 6.0 (feature level 146).
+            **Changes**: Before Zulip 12.0 (feature level 476), the
+            "Paragraph" field type was not supported.
+
+            New in Zulip 6.0 (feature level 146).
           default: false
         required:
           type: boolean
@@ -26680,17 +27214,18 @@ components:
     RealmDomain:
       type: object
       additionalProperties: false
-      description: |
-        Object containing details of the newly added domain.
       properties:
         domain:
           type: string
           description: |
-            The new allowed domain.
+            The allowed domain.
         allow_subdomains:
           type: boolean
           description: |
             Whether subdomains are allowed for this domain.
+      required:
+        - domain
+        - allow_subdomains
     RealmPlayground:
       type: object
       additionalProperties: false
@@ -27498,12 +28033,8 @@ components:
               description: |
                 The ID of the user who added the reaction.
 
-                **Changes**: New in Zulip 3.0 (feature level 2). The `user`
-                object is deprecated and will be removed in the future.
-
-                In Zulip 10.0 (feature level 328), the deprecated `user` object
-                was removed which contained the following properties: `id`, `email`,
-                `full_name` and `is_mirror_dummy`.
+                **Changes**: New in Zulip 3.0 (feature level 2), which
+                deprecated the `user` object.
     EmojiBase:
       type: object
       properties:
@@ -27828,7 +28359,13 @@ components:
         reactions:
           type: array
           description: |
-            Data on any reactions to the message.
+            Data on any [reactions](/help/emoji-reactions) to the message,
+            ordered chronologically from oldest to newest reaction.
+
+            **Changes**: In Zulip 10.0 (feature level 328), the deprecated `user`
+            object was removed from the data for each reaction. It contained the
+            following information about the user who added the reaction: `id`,
+            `email`, `full_name` and `is_mirror_dummy`.
           items:
             $ref: "#/components/schemas/EmojiReaction"
         recipient_id:
@@ -28089,10 +28626,9 @@ components:
       properties:
         id:
           type: integer
+          readOnly: true
           description: |
-            The unique ID of the draft. It will only used whenever the drafts are
-            fetched. This field should not be specified when the draft is being
-            created or edited.
+            The unique ID of the draft.
         type:
           type: string
           description: |
@@ -28455,7 +28991,8 @@ components:
               nullable: true
             avatar_version: {}
             is_imported_stub: {}
-            profile_data: {}
+            profile_data:
+              $ref: "#/components/schemas/ProfileData"
     UserBase:
       type: object
       description: |
@@ -28615,9 +29152,7 @@ components:
 
             **Changes**: New in Zulip 12.0 (feature level 433).
           example: false
-        profile_data:
-          $ref: "#/components/schemas/profile_data"
-    profile_data:
+    ProfileData:
       type: object
       description: |
         Only present if `is_bot` is false; bots can't have custom profile fields.
@@ -29688,6 +30223,68 @@ components:
         Is `null` if channel does not belong to any folder.
 
         **Changes**: New in Zulip 11.0 (feature level 389).
+    SubscriptionProperty:
+      type: string
+      enum:
+        - color
+        - is_muted
+        - in_home_view
+        - pin_to_top
+        - desktop_notifications
+        - audible_notifications
+        - push_notifications
+        - email_notifications
+        - wildcard_mentions_notify
+      description: |
+        One of the channel properties described below:
+
+        - `"color"`: The hex value of the user's display color for the channel.
+
+        - `"is_muted"`: Whether the channel is [muted](/help/mute-a-channel).<br>
+          **Changes**: As of Zulip 6.0 (feature level 139), updating either
+          `"is_muted"` or `"in_home_view"` generates two [subscription update
+          events](/api/get-events#subscription-update), one for each property,
+          that are sent to clients. Prior to this feature level, updating either
+          property only generated a subscription update event for
+          `"in_home_view"`. <br>
+          Prior to Zulip 2.1.0, this feature was represented
+          by the more confusingly named `"in_home_view"` (with the
+          opposite value: `in_home_view=!is_muted`); for
+          backwards-compatibility, modern Zulip still accepts that property.
+
+        - `"pin_to_top"`: Whether to pin the channel at the top of the channel list.
+
+        - `"desktop_notifications"`: Whether to show desktop notifications
+          for all messages sent to the channel.
+
+        - `"audible_notifications"`: Whether to play a sound
+          notification for all messages sent to the channel.
+
+        - `"push_notifications"`: Whether to trigger a mobile push
+          notification for all messages sent to the channel.
+
+        - `"email_notifications"`: Whether to trigger an email
+          notification for all messages sent to the channel.
+
+        - `"wildcard_mentions_notify"`: Whether wildcard mentions trigger
+          notifications as though they were personal mentions in this channel.
+      example: "pin_to_top"
+    SubscriptionPropertyValue:
+      oneOf:
+        - type: boolean
+          description: |
+            The new boolean value for the specified property.
+        - type: string
+          description: |
+            The hex value of the user's display color for the channel.
+      description: |
+        The new value of the property being modified.
+
+        If the property is `"color"`, then `value` is a string
+        representing the hex value of the user's display
+        color for the channel. For all other above properties,
+        `value` is a boolean.
+      example: "true"
 
   ###################
   # Shared responses

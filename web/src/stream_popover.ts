@@ -3,7 +3,7 @@ import assert from "minimalistic-assert";
 import type * as tippy from "tippy.js";
 import * as z from "zod/mini";
 
-import render_inline_decorated_channel_name from "../templates/inline_decorated_channel_name.hbs";
+import render_decorated_channel_name from "../templates/decorated_channel_name.hbs";
 import render_inline_stream_or_topic_reference from "../templates/inline_stream_or_topic_reference.hbs";
 import render_topic_already_exists_warning_banner from "../templates/modal_banner/topic_already_exists_warning_banner.hbs";
 import render_unsubscribed_participants_warning_banner from "../templates/modal_banner/unsubscribed_participants_warning_banner.hbs";
@@ -170,7 +170,7 @@ function build_stream_popover(opts: {elt: HTMLElement; stream_id: number}): void
                 message_view.show(
                     [
                         {
-                            operator: "stream",
+                            operator: "channel",
                             operand: sub.stream_id.toString(),
                         },
                     ],
@@ -881,7 +881,10 @@ export async function build_move_topic_to_stream_popover(
             );
         } else {
             $("#move_topic_to_stream_widget .dropdown_widget_value").html(
-                render_inline_decorated_channel_name({stream, show_colored_icon: true}),
+                render_decorated_channel_name({
+                    stream,
+                    show_colored_icon: true,
+                }),
             );
         }
     }
@@ -1220,18 +1223,29 @@ export async function build_move_topic_to_stream_popover(
 }
 
 export function initialize(): void {
-    $("#stream_filters").on("click", ".stream-sidebar-menu-icon", function (this: HTMLElement, e) {
+    function on_sidebar_menu_icon_click(element: HTMLElement, e: JQuery.ClickEvent): void {
         e.preventDefault();
-        const $stream_li = $(this).parents("li");
+        const $stream_li = $(element).parents("li");
         const stream_id = elem_to_stream_id($stream_li);
 
         build_stream_popover({
-            elt: this,
+            elt: element,
             stream_id,
         });
 
         e.stopPropagation();
+    }
+    $("#stream_filters").on("click", ".stream-sidebar-menu-icon", function (this: HTMLElement, e) {
+        on_sidebar_menu_icon_click(this, e);
     });
+
+    $("#left-sidebar-modal").on(
+        "click",
+        "#more-topics-modal .stream-sidebar-menu-icon",
+        function (this: HTMLElement, e) {
+            on_sidebar_menu_icon_click(this, e);
+        },
+    );
 
     $("body").on("click", ".inbox-stream-menu", function (this: HTMLElement, e) {
         const stream_id = Number.parseInt($(this).attr("data-stream-id")!, 10);

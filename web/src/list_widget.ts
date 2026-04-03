@@ -51,6 +51,10 @@ type ListWidgetOpts<Key, Item = Key> = {
     post_scroll__pre_render_callback?: () => void;
     get_min_load_count?: (rendered_count: number, load_count: number) => number;
     is_scroll_position_for_render?: () => boolean;
+    render_empty_list_widget_for_table?: (context: {
+        empty_list_message: string;
+        column_count: number;
+    }) => string;
     filter?: ListWidgetFilterOpts<Item>;
     multiselect?: {
         selected_items: Key[];
@@ -219,6 +223,10 @@ function get_column_count_for_table($table: JQuery): number {
 export function render_empty_list_message_if_needed(
     $container: JQuery,
     has_active_filters?: boolean,
+    custom_render_empty_list_widget_for_table?: (context: {
+        empty_list_message: string;
+        column_count: number;
+    }) => string,
 ): void {
     let empty_list_message = $container.attr("data-empty");
 
@@ -240,7 +248,9 @@ export function render_empty_list_message_if_needed(
         }
 
         const column_count = get_column_count_for_table($table);
-        empty_list_widget_html = render_empty_list_widget_for_table({
+        const render_fn =
+            custom_render_empty_list_widget_for_table ?? render_empty_list_widget_for_table;
+        empty_list_widget_html = render_fn({
             empty_list_message,
             column_count,
         });
@@ -383,11 +393,21 @@ export function create<Key, Item = Key>(
             // Stop once the offset reaches the length of the original list.
             if (this.all_rendered()) {
                 meta.has_active_filters = opts.filter?.is_active?.() ?? Boolean(meta.filter_value);
-                render_empty_list_message_if_needed($container, meta.has_active_filters);
+                render_empty_list_message_if_needed(
+                    $container,
+                    meta.has_active_filters,
+                    opts.render_empty_list_widget_for_table,
+                );
                 if (opts.callback_after_render) {
                     opts.callback_after_render();
                 }
                 return;
+            }
+
+            // When no items have been rendered yet, clear any
+            // previously shown empty-list message before appending.
+            if (meta.offset === 0) {
+                $container.empty();
             }
 
             const slice = meta.filtered_list.slice(meta.offset, meta.offset + load_count);
@@ -498,7 +518,7 @@ export function create<Key, Item = Key>(
                     "click.list_widget_sort",
                     "[data-sort]",
                     function (this: HTMLElement) {
-                        handle_sort($(this), widget);
+                        handle_sort($(this), widget, opts.$parent_container);
                     },
                 );
             }
@@ -541,6 +561,11 @@ export function create<Key, Item = Key>(
             rendered_row.remove();
             // We removed a rendered row, so we need to reduce one offset.
             widget.reduce_rendered_offset();
+            // If the container is now empty, render() will display
+            // the empty-list message.
+            if (this.all_rendered()) {
+                this.render();
+            }
         },
 
         clean_redraw() {
@@ -659,7 +684,11 @@ export function create<Key, Item = Key>(
     return widget;
 }
 
-export function handle_sort<Key, Item>($th: JQuery, list: ListWidget<Key, Item>): void {
+export function handle_sort<Key, Item>(
+    $th: JQuery,
+    list: ListWidget<Key, Item>,
+    $parent_container?: JQuery,
+): void {
     /*
         one would specify sort parameters like this:
             - name => sort alphabetic.
@@ -686,7 +715,13 @@ export function handle_sort<Key, Item>($th: JQuery, list: ListWidget<Key, Item>)
             $th.removeClass("descend");
         }
     } else {
-        $th.siblings(".active").removeClass("active");
+        if ($parent_container) {
+            // Remove `active` class for other elements with `[data-sort]`.
+            // This helps support HTML structures where the sorting `<th>` elements are not siblings.
+            $parent_container.find("[data-sort].active").not($th).removeClass("active");
+        } else {
+            $th.siblings(".active").removeClass("active");
+        }
         $th.addClass("active");
     }
 

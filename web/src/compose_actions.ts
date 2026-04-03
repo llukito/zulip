@@ -529,6 +529,7 @@ export let cancel = (): void => {
     compose_banner.clear_message_sent_banners();
     compose_banner.clear_non_interleaved_view_messages_fading_banner();
     compose_banner.clear_interleaved_view_messages_fading_banner();
+    compose_tooltips.dismiss_intro_go_to_conversation_tooltip();
     call_hooks(compose_cancel_hooks);
     compose_state.set_message_type(undefined);
     compose_pm_pill.clear();
@@ -634,6 +635,10 @@ export function on_narrow(opts: NarrowActivateOpts): void {
 
     if (opts.trigger === "narrow_to_compose_target") {
         compose_fade.update_message_list();
+        // When narrowing to a compose target, focus the compose
+        // area, under the assumption that someone so narrowing
+        // is ready to compose their message.
+        $("#compose-textarea").trigger("focus");
         return;
     }
 

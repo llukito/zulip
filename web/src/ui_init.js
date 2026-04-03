@@ -506,6 +506,11 @@ export async function initialize_everything(state_data) {
     await people.initialize(current_user.user_id, state_data.people, state_data.user_groups);
     starred_messages.initialize(state_data.starred_messages);
 
+    // Must happen after people.initialize(). And also before
+    // settings.initialize(), as we check if the user owns any
+    // bot to show the lock icon for "Bots" panel
+    bot_data.initialize(state_data.bot);
+
     // The emoji module must be initialized before the right sidebar
     // module, so that we can display custom emoji in statuses.
     emoji.initialize({
@@ -582,6 +587,9 @@ export async function initialize_everything(state_data) {
     user_group_edit.initialize();
     stream_edit_subscribers.initialize();
     stream_data.initialize(state_data.stream_data);
+    stream_data.set_channel_has_locally_available_topic(
+        stream_topic_history.channel_has_locally_available_topic,
+    );
     user_group_edit_members.initialize();
     stream_card_popover.initialize();
     pm_conversations.recent.initialize(state_data.pm_conversations);
@@ -598,7 +606,7 @@ export async function initialize_everything(state_data) {
             message_view.show(
                 [
                     {
-                        operator: "stream",
+                        operator: "channel",
                         operand: sub.stream_id.toString(),
                     },
                 ],
@@ -644,7 +652,6 @@ export async function initialize_everything(state_data) {
     drafts.initialize(); // Must happen before reload_setup.initialize()
     reload_setup.initialize();
     unread.initialize(state_data.unread);
-    bot_data.initialize(state_data.bot); // Must happen after people.initialize()
     message_fetch.initialize(() => {
         recent_view_ui.set_initial_message_fetch_status(false);
         recent_view_ui.revive_current_focus();
@@ -760,6 +767,8 @@ export async function initialize_everything(state_data) {
     // is defined. Also, must happen after people.initialize()
     onboarding_steps.initialize(state_data.onboarding_steps, {
         show_message_view: message_view.show,
+        update_recipient_row_attention_level:
+            compose_recipient.update_recipient_row_attention_level,
     });
     typing.initialize();
     starred_messages_ui.initialize();

@@ -400,7 +400,7 @@ export function insert_new_messages(opts: InsertNewMessagesOpts): Message[] {
 
     activity.set_received_new_messages(true);
     message_notifications.received_messages(messages);
-    stream_list.update_streams_sidebar();
+    stream_list.update_streams_sidebar_for_messages(messages);
     pm_list.update_private_messages();
 
     return messages;
@@ -506,7 +506,7 @@ export function update_messages(events: UpdateMessageEvent[]): void {
                 any_message_content_edited = true;
 
                 // Update raw_content, so that editing a few times in a row is fast.
-                message_store.maybe_update_raw_content(anchor_message, event.content);
+                message_store.maybe_update_raw_content(anchor_message.id, event.content);
 
                 // Editing a message may change the titles for linked
                 // media, so we must invalidate the asset map.

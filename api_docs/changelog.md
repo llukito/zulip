@@ -20,6 +20,58 @@ format used by the Zulip server that they are interacting with.
 
 ## Changes in Zulip 12.0
 
+**Feature level 481**
+
+* [`POST /register`](/api/register-queue): Added `idle_queue_timeout`
+  request parameter, allowing clients to configure how long the server
+  keeps the event queue alive when the client is not polling. The
+  string `"mobile"` can be passed to use the server's recommended
+  timeout for mobile clients. The response now includes
+  `idle_queue_timeout_secs` with the effective timeout in seconds.
+
+**Feature level 480**
+
+* [`GET /streams/{stream_id}`](/api/get-stream-by-id): Details of
+  archived channels can now be fetched.
+* [`GET /streams/{stream_id}/members`](/api/get-subscribers):
+  Subscribers of archived channels can now be fetched.
+* [`GET /users/me/{stream_id}/topics`](/api/get-stream-topics):
+  Topics in archived channels can now be fetched.
+
+**Feature level 479**
+
+* [`GET /thumbnail/status/{realm_id_str}/{filename}`](/api/check-thumbnail-status): Added
+  a new endpoint to check whether thumbnails have been generated for an
+  uploaded image.
+
+**Feature level 478**
+
+* [`POST /realm/filters`](/api/add-linkifier),
+  [`PATCH /realm/filters/{filter_id}`](/api/update-linkifier): Added
+  `alternative_url_templates` parameter for specifying additional URL
+  templates used only for reverse linkification (converting pasted URLs
+  to linkifier pattern text). These templates have no effect on forward
+  linkification.
+* [`GET /realm/linkifiers`](/api/get-linkifiers),
+  [`POST /register`](/api/register-queue),
+  [`GET /events`](/api/get-events): Linkifier objects now include the
+  `alternative_url_templates` field.
+
+**Feature level 477**
+
+* `PATCH /realm`, [`POST /register`](/api/register-queue),
+  [`GET /events`](/api/get-events): Added `workplace_users_group`
+  field which is a [group-setting value](/api/group-setting-values)
+  describing the set of users who will be considered as workplace
+  users for billing.
+
+**Feature level 476**
+
+* [`POST /realm/profile_fields`](/api/create-custom-profile-field),
+  [`GET /realm/profile_fields`](/api/get-custom-profile-fields) The
+  `display_in_profile_summary` parameter can now be set to true for the
+  `Paragraph` field type.
+
 **Feature level 475**
 
 * [`GET /events`](/api/get-events): `realm_user` events with `op: "update"`
@@ -315,7 +367,8 @@ element to plain escaped text.
 * [`GET /events`](/api/get-events): The deprecated `update_display_settings`
   and `update_global_notifications` event types are no longer sent to any
   clients. These legacy event types were deprecated in Zulip 5.0 (feature
-  level 89) and replaced by the `user_settings` event type.
+  level 89) and replaced by the [`user_settings` event
+  type](/api/get-events#user_settings-update).
 
 **Feature level 438**
 
@@ -3004,8 +3057,9 @@ No changes; feature level used for Zulip 7.0 release.
 
 **Feature level 160**
 
-* `POST /api/v1/jwt/fetch_api_key`: Added new endpoint to fetch API
-  keys using JSON Web Token (JWT) authentication.
+* [`POST /api/v1/jwt/fetch_api_key`](/api/jwt-fetch-api-key): Added
+  new endpoint to fetch API keys using JSON Web Token (JWT)
+  authentication.
 * `accounts/login/jwt/`: Adjusted format of requests to undocumented,
   optional endpoint for JWT authentication log in support.
 
@@ -3145,9 +3199,11 @@ user's profile.
   `emails_restricted_to_domains`, `invite_required`, and
   `waiting_period_threshold` settings can no longer be changed by
   organization administrators who are not owners.
-* `PATCH /realm/domains`, `POST /realm/domains`, `DELETE
-  /realm/domains`: Organization administrators who are not owners can
-  no longer access these endpoints.
+* [`POST /realm/domains`](/api/add-realm-domain),
+  [`PATCH /realm/domains/{domain}`](/api/patch-realm-domain),
+  [`DELETE /realm/domains/{domain}`](/api/delete-realm-domain):
+  Organization administrators who are not owners can no longer access
+  these endpoints.
 
 **Feature level 142**
 
@@ -3764,8 +3820,8 @@ No changes; feature level used for Zulip 4.0 release.
   parameter `default_language`.
 * `POST /users/me/tutorial_status`: Removed unnecessary JSON-encoding of string
   parameter `status`.
-* `POST /realm/domains`: Removed unnecessary JSON-encoding of string
-  parameter `domain`.
+* [`POST /realm/domains`](/api/add-realm-domain): Removed unnecessary
+  JSON-encoding of string parameter `domain`.
 * `PATCH /default_stream_groups/{user_id}`: Removed unnecessary JSON-encoding of string
   parameters `new_group_name` and `new_description`.
 * `POST /users/me/hotspots`: Removed unnecessary JSON-encoding of string

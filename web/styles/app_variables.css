@@ -320,6 +320,13 @@
     /* 5px / 16px em */
     --left-sidebar-direct-messages-bottom-divider-padding: 0.3125em;
 
+    /* Left sidebar modal */
+    /* Close area height chosen by playing around with different heights and this one felt best. */
+    --left-sidebar-modal-close-area-height: 1.9em;
+    --left-sidebar-modal-close-area-padding-top: calc(
+        1.9em + var(--header-padding-bottom)
+    );
+
     /* We base sidebar row heights on their line heights.
        Prominent rows include things like headers (e.g., VIEWS)
        as well as navigation items. Everything else takes
@@ -380,6 +387,9 @@
     --markdown-interelement-space-px: 5px;
     --markdown-interelement-doubled-space-px: calc(
         var(--markdown-interelement-space-px) * 2
+    );
+    --markdown-interelement-halved-space-px: calc(
+        var(--markdown-interelement-space-px) / 2
     );
     /* Certain elements need to be fitted perfectly to
        the line height; the length here can be used to set
@@ -649,6 +659,8 @@
     /* User profile modal */
     --user-profile-modal-height: 75dvh;
     --user-profile-modal-body-margin-bottom: 20px;
+    /* Dropdown list item */
+    --dropdown-list-item-label-icon-gap: 0.3125em; /* 5px at 16px/em */
 
     /* Height of the button for filter dropdown in stream settings UI.
     It is set equal to the height of the search input, i.e. 1.4em (input
@@ -683,13 +695,15 @@
     This value will be overridden when stream settings is opened.
     */
     --stream-subscriber-list-max-height: 100%;
-
+    --new-stream-subscriber-list-max-height: 100%;
     /*
       Reusable dimensions and offsets.
     */
     --margin-bottom-field-description: 3px;
     /* Gap between tabs in the tab picker */
     --grid-gap-tab-picker: 2px;
+    /* 10px at 16px */
+    --view-only-field-horizontal-padding: 0.625em;
 
     /*
     The tippy arrow which matches the color of the popover's border,
@@ -699,6 +713,11 @@
     visually consistent with that of it's parent popover.
     */
     --popover-tippy-arrow-before-offset: -6.5px;
+
+    /* Decorated channel name related values */
+    --decorated-channel-name-privacy-icon-gap: 0.3125em; /* 5px at 16px/em */
+    --inline-decorated-channel-name-privacy-icon-gap: 0.125em; /* 2px at 16px/em */
+    --inline-decorated-channel-name-padding-left: 0.0937em; /* 1.5px at 16px/em */
 
     /* Color picker popover values */
     --size-color-swatch: 1em;
@@ -854,6 +873,23 @@
     --color-left-sidebar-direct-messages-bottom-divider: light-dark(
         hsl(0deg 0% 0% / 15%),
         hsl(0deg 0% 100% / 15%)
+    );
+    --color-left-sidebar-inner-box-shadow: light-dark(
+        hsl(0deg 0% 0% / 20%),
+        hsl(0deg 0% 0% / 80%)
+    );
+    --color-left-sidebar-middle-box-shadow: var(--color-background);
+    --color-left-sidebar-outer-box-shadow: light-dark(
+        hsl(0deg 0% 94% / 20%),
+        hsl(0deg 0% 11% / 30%)
+    );
+    --color-left-sidebar-middle-box-shadow-hover: light-dark(
+        hsl(244deg 36% 91%),
+        hsl(240deg 19% 24%)
+    );
+    --color-left-sidebar-outer-box-shadow-hover: light-dark(
+        hsl(240deg 100% 50% / 7%),
+        hsl(240deg 100% 75% / 20%)
     );
     --color-unread-marker: hsl(217deg 64% 59%);
     --color-masked-unread-marker: light-dark(
@@ -1121,6 +1157,9 @@
 
     /* Recent view */
     --recent-view-max-avatars: 4;
+    --recent-view-participant-item-width: 1.5em; /* 24px at 16px / 1em */
+    --recent-view-participant-item-padding-x: 0.0938em; /* 1.5px at 16px / 1em */
+    --recent-view-participants-padding-x-start: 0.25em; /* 4px at 16px / 1em */
     --color-border-recent-view-row: light-dark(
         hsl(0deg 0% 87%),
         hsl(0deg 0% 0% / 20%)
@@ -1130,23 +1169,25 @@
         hsl(0deg 0% 0% / 10%)
     );
     --color-background-recent-view-row: light-dark(
-        hsl(0deg 0% 96%),
-        hsl(0deg 0% 14%)
+        hsl(0deg 0% 100%),
+        hsl(0deg 0% 11%)
     );
     --color-background-recent-view-row-hover: light-dark(
-        hsl(222deg 70% 12% / 7%),
-        hsl(220deg 18% 95% / 7%)
+        color-mix(in srgb, hsl(0deg 0% 0%) 5%, hsl(0deg 0% 100%)),
+        color-mix(in srgb, hsl(0deg 0% 100%) 5%, hsl(0deg 0% 11%))
     );
-    --color-background-recent-view-unread-row: light-dark(
-        hsl(0deg 0% 100%),
-        color-mix(in srgb, hsl(0deg 0% 100%) 8%, hsl(0deg 0% 11%))
+    --color-background-recent-view-unread-row: var(
+        --color-background-recent-view-row
     );
-    --color-background-recent-view-unread-row-hover: light-dark(
-        hsl(220deg 5% 12% / 3%),
-        color-mix(in srgb, hsl(0deg 0% 100%) 11%, hsl(0deg 0% 11%))
+    --color-background-recent-view-unread-row-hover: var(
+        --color-background-recent-view-row-hover
+    );
+    --color-recent-view-link-unread: light-dark(
+        hsl(0deg 0% 5%),
+        hsl(0deg 0% 100% / 83%)
     );
     --color-recent-view-link: light-dark(
-        hsl(0deg 0% 15%),
+        hsl(0deg 0% 20%),
         hsl(0deg 0% 100% / 75%)
     );
     --color-background-recent-filters-button-focus: light-dark(
@@ -1170,8 +1211,8 @@
         hsl(211deg 18% 25%)
     );
     --color-background-recent-view-table-thead-th: light-dark(
-        var(--grey-50),
-        hsl(0deg 0% 100% / 10%)
+        hsl(0deg 0% 97%),
+        hsl(0deg 0% 16%)
     );
     --color-background-recent-view-table-thead-sort-header: light-dark(
         hsl(229deg 9% 36% / 7%),
@@ -1188,6 +1229,10 @@
     --color-text-recent-view-last-msg-time: light-dark(
         hsl(0deg 0% 15% / 75%),
         hsl(0deg 0% 100% / 50%)
+    );
+    --color-text-recent-view-last-msg-time-unread: light-dark(
+        hsl(0deg 0% 0% / 75%),
+        hsl(0deg 0% 100% / 58%)
     );
 
     /* Compose box colors */
@@ -2342,7 +2387,7 @@
     );
     --background-color-current-selection-dropdown-item: color-mix(
         in srgb,
-        var(--color-active-dropdown-item) 7%,
+        var(--color-active-dropdown-item) 2%,
         transparent
     );
     --background-color-current-setting-dropdown-item: color-mix(
@@ -2885,6 +2930,14 @@
     --color-border-legacy-input-focus: light-dark(
         hsl(206deg 80% 62% / 80%),
         hsl(0deg 0% 0% / 90%)
+    );
+    --color-background-disabled-settings-select: light-dark(
+        hsl(0deg 0% 93%),
+        hsl(0deg 0% 0% / 20%)
+    );
+    --color-background-disabled-modal-select: light-dark(
+        hsl(0deg 0% 90%),
+        hsl(0deg 0% 0% / 20%)
     );
     --color-text-input: light-dark(hsl(0deg 0% 14%), hsl(0deg 0% 95%));
     /* TODO: Light mode uses browser-default white

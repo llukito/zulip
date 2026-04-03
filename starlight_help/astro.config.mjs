@@ -298,7 +298,7 @@ export default defineConfig({
                         "format-your-message-using-markdown",
                         {
                             label: "Search filters",
-                            link: "/search-for-messages/#search-filters",
+                            link: "/search-for-messages#search-filters",
                         },
                         "using-zulip-via-email",
                     ],
@@ -385,6 +385,7 @@ export default defineConfig({
                         "view-messages-sent-by-a-user",
                         "link-to-a-message-or-conversation",
                         "search-for-messages",
+                        "scroll-to-date",
                         "printing-messages",
                         {
                             label: "View message content as Markdown",
@@ -556,6 +557,7 @@ export default defineConfig({
                         "change-a-users-name",
                         "manage-user-channel-subscriptions",
                         "manage-user-group-membership",
+                        "reset-settings-for-users",
                     ],
                 },
                 {

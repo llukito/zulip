@@ -16,6 +16,7 @@ const compose_state = zrequire("compose_state");
 const narrow_banner = zrequire("narrow_banner");
 const people = zrequire("people");
 const stream_data = zrequire("stream_data");
+stream_data.set_channel_has_locally_available_topic(() => false);
 const {Filter} = zrequire("../src/filter");
 const message_fetch = mock_esm("../src/message_fetch", {
     load_messages_around_anchor() {},
@@ -824,7 +825,7 @@ run_test("narrow_to_compose_target streams", ({override, override_rewire}) => {
         {operator: "topic", operand: "four"},
     ]);
 
-    // Test with blank topic, with realm_topics_policy
+    // Test with blank topic, empty topic not allowed
     override(realm, "realm_topics_policy", "disable_empty_topic");
     compose_state.topic("");
     args.called = false;
@@ -832,8 +833,9 @@ run_test("narrow_to_compose_target streams", ({override, override_rewire}) => {
     assert.equal(args.called, true);
     assert.deepEqual(args.terms, [{operator: "channel", operand: rome_id.toString()}]);
 
-    // Test with blank topic, without realm_topics_policy
+    // Test with blank topic, empty topic allowed
     override(realm, "realm_topics_policy", "allow_empty_topic");
+    override_rewire(stream_data, "can_create_new_topics_in_stream", () => true);
     compose_state.topic("");
     args.called = false;
     message_view.to_compose_target();
@@ -843,24 +845,15 @@ run_test("narrow_to_compose_target streams", ({override, override_rewire}) => {
         {operator: "topic", operand: ""},
     ]);
 
-    // Test with no topic, with realm mandatory topics
-    override(realm, "realm_topics_policy", "disable_empty_topic");
-    compose_state.topic(undefined);
+    // When empty topic is allowed by policy but user cannot create
+    // topics and no empty topic exists, narrowing with blank topic
+    // should not include the topic term.
+    override_rewire(stream_data, "can_create_new_topics_in_stream", () => false);
+    compose_state.topic("");
     args.called = false;
     message_view.to_compose_target();
     assert.equal(args.called, true);
     assert.deepEqual(args.terms, [{operator: "channel", operand: rome_id.toString()}]);
-
-    // Test with no topic, without realm mandatory topics
-    override(realm, "realm_topics_policy", "allow_empty_topic");
-    compose_state.topic(undefined);
-    args.called = false;
-    message_view.to_compose_target();
-    assert.equal(args.called, true);
-    assert.deepEqual(args.terms, [
-        {operator: "channel", operand: rome_id.toString()},
-        {operator: "topic", operand: ""},
-    ]);
 });
 
 run_test("narrow_to_compose_target direct messages", ({override, override_rewire}) => {
@@ -936,12 +929,15 @@ run_test("fast_track_current_msg_list_to_anchor date", ({override}) => {
         selected = {id, opts};
     };
     message_lists.current = list;
+    $("#navbar-fixed-container").set_height(50);
+    // Date jumps should place the selected message below the sticky
+    // message header, increasing the target scroll offset by 40px.
 
     const in_range = new Date(150 * 1000).toISOString();
     message_view.fast_track_current_msg_list_to_anchor("date", in_range);
     assert.deepEqual(selected, {
         id: 102,
-        opts: {then_scroll: true, from_scroll: false},
+        opts: {then_scroll: true, from_scroll: false, target_scroll_offset: 90},
     });
 
     list.data.fetch_status.finish_older_batch({
@@ -953,7 +949,7 @@ run_test("fast_track_current_msg_list_to_anchor date", ({override}) => {
     message_view.fast_track_current_msg_list_to_anchor("date", before_range);
     assert.deepEqual(selected, {
         id: 101,
-        opts: {then_scroll: true, from_scroll: false},
+        opts: {then_scroll: true, from_scroll: false, target_scroll_offset: 90},
     });
 
     // If we have not found the oldest message, and the anchor timestamp is
@@ -989,7 +985,12 @@ run_test("fast_track_current_msg_list_to_anchor date", ({override}) => {
     assert.equal(load_messages_anchor, "date");
     assert.deepEqual(selected, {
         id: 100,
-        opts: {then_scroll: true, from_scroll: false, force_rerender: true},
+        opts: {
+            then_scroll: true,
+            from_scroll: false,
+            force_rerender: true,
+            target_scroll_offset: 90,
+        },
     });
 
     // Message 104 is not in the list so we need to fetch it from the API
@@ -1017,7 +1018,12 @@ run_test("fast_track_current_msg_list_to_anchor date", ({override}) => {
     assert.equal(load_messages_anchor, "date");
     assert.deepEqual(selected, {
         id: 104,
-        opts: {then_scroll: true, from_scroll: false, force_rerender: true},
+        opts: {
+            then_scroll: true,
+            from_scroll: false,
+            force_rerender: true,
+            target_scroll_offset: 90,
+        },
     });
 
     // If we have found the newest message, having anchor_date in
@@ -1031,7 +1037,7 @@ run_test("fast_track_current_msg_list_to_anchor date", ({override}) => {
     message_view.fast_track_current_msg_list_to_anchor("date", future_range);
     assert.deepEqual(selected, {
         id: 104,
-        opts: {then_scroll: true, from_scroll: false},
+        opts: {then_scroll: true, from_scroll: false, target_scroll_offset: 90},
     });
     assert.equal(load_messages_calls, 0);
 

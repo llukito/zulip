@@ -347,12 +347,16 @@ function update_group_membership_button(group_id: number): void {
     );
     if (is_direct_member) {
         $group_settings_button
-            .text($t({defaultMessage: "Leave group"}))
+            .find(".action-button-label")
+            .text($t({defaultMessage: "Leave group"}));
+        $group_settings_button
             .removeClass("action-button-subtle-brand")
             .addClass("action-button-neutral");
     } else {
         $group_settings_button
-            .text($t({defaultMessage: "Join group"}))
+            .find(".action-button-label")
+            .text($t({defaultMessage: "Join group"}));
+        $group_settings_button
             .removeClass("action-button-subtle-neutral")
             .addClass("action-button-subtle-brand");
     }
@@ -1337,7 +1341,7 @@ export function handle_deleted_group(group_id: number): void {
 
     if (is_editing_group(group_id)) {
         const user_group = user_groups.get_user_group_from_id(group_id);
-        $("#groups_overlay .deactivated-user-group-icon-right").show();
+        $("#groups_overlay .deactivated-user-group-icon").show();
 
         update_group_deactivated_banner(user_group);
         update_deactivate_and_reactivate_buttons(user_group);
@@ -1355,7 +1359,7 @@ export function handle_reactivated_group(group_id: number): void {
 
     if (is_editing_group(group_id)) {
         const user_group = user_groups.get_user_group_from_id(group_id);
-        $("#groups_overlay .deactivated-user-group-icon-right").hide();
+        $("#groups_overlay .deactivated-user-group-icon").hide();
 
         update_group_deactivated_banner(user_group);
         update_deactivate_and_reactivate_buttons(user_group);
@@ -1693,15 +1697,20 @@ export function switch_group_tab(tab_name: string): void {
         use `group_list_toggler.goto`.
     */
 
+    update_filter_widget_visibility(tab_name);
     redraw_left_panel(tab_name);
     setup_group_list_tab_hash(tab_name);
 }
 
-export function add_or_remove_from_group(group: UserGroup, $group_row: JQuery): void {
+export function add_or_remove_from_group(
+    group: UserGroup,
+    $group_row?: JQuery,
+    $button_element?: JQuery,
+): void {
     const user_id = people.my_current_user_id();
     const is_direct_member = user_groups.is_direct_member_of(user_id, group.id);
     function success_callback(): void {
-        if ($group_row.length > 0) {
+        if ($group_row !== undefined && $group_row.length > 0) {
             hide_membership_toggle_spinner($group_row);
             // This should only be triggered when a user is on another group
             // edit panel and they join a group via the left panel plus button.
@@ -1715,17 +1724,29 @@ export function add_or_remove_from_group(group: UserGroup, $group_row: JQuery): 
                 open_group_edit_panel_for_row(util.the($group_row));
             }
         }
-    }
 
-    function error_callback(): void {
-        if ($group_row.length > 0) {
-            hide_membership_toggle_spinner($group_row);
+        if ($button_element !== undefined) {
+            buttons.hide_button_loading_indicator($button_element);
         }
     }
 
-    if ($group_row.length > 0) {
+    function error_callback(): void {
+        if ($group_row !== undefined && $group_row.length > 0) {
+            hide_membership_toggle_spinner($group_row);
+        }
+
+        if ($button_element !== undefined) {
+            buttons.hide_button_loading_indicator($button_element);
+        }
+    }
+
+    if ($group_row !== undefined && $group_row.length > 0) {
         display_membership_toggle_spinner($group_row);
     }
+    if ($button_element !== undefined) {
+        buttons.show_button_loading_indicator($button_element);
+    }
+
     if (is_direct_member) {
         user_group_edit_members.edit_user_group_membership({
             group,
@@ -1885,15 +1906,22 @@ function setup_dropdown_filters_widget(): void {
     filters_dropdown_widget.setup();
 }
 
-function update_filter_widget_visibility(): void {
-    if (user_groups.realm_has_deactivated_user_groups()) {
-        $("#user-group-edit-filter-options").show();
-    } else {
+function update_filter_widget_visibility(tab_name?: string): void {
+    const active_tab = tab_name ?? get_active_data().$tabs.first().attr("data-tab-key");
+    if (active_tab === "roles") {
+        // Roles cannot be deactivated, so the active/deactivated filter
+        // dropdown is not applicable on the roles tab. We hide the dropdown
+        // and ignore the filter value completely for this tab.
+        $("#user-group-edit-filter-options").hide();
+        update_displayed_groups(FILTERS.ACTIVE_GROUPS);
+    } else if (!user_groups.realm_has_deactivated_user_groups()) {
         $("#user-group-edit-filter-options").hide();
         update_displayed_groups(FILTERS.ACTIVE_GROUPS);
         if (filters_dropdown_widget) {
             filters_dropdown_widget.render(FILTERS.ACTIVE_GROUPS);
         }
+    } else {
+        $("#user-group-edit-filter-options").show();
     }
 }
 
@@ -2277,6 +2305,7 @@ export function initialize(): void {
                 people.my_current_user_id(),
                 user_group_id,
             );
+            const $target_elem = $(this);
 
             if (is_member && !is_direct_member) {
                 const associated_subgroups = user_groups.get_associated_subgroups(
@@ -2291,15 +2320,24 @@ export function initialize(): void {
                     modal_content_html: render_confirm_join_group_direct_member({
                         associated_subgroup_names,
                     }),
+                    is_compact: true,
                     id: "confirm_join_group_direct_member",
                     on_click() {
-                        const $group_row = row_for_group_id(user_group_id);
-                        add_or_remove_from_group(user_group, $group_row);
+                        if ($target_elem.hasClass("action-button")) {
+                            add_or_remove_from_group(user_group, undefined, $target_elem);
+                        } else {
+                            const $group_row = row_for_group_id(user_group_id);
+                            add_or_remove_from_group(user_group, $group_row);
+                        }
                     },
                 });
             } else {
-                const $group_row = row_for_group_id(user_group_id);
-                add_or_remove_from_group(user_group, $group_row);
+                if ($target_elem.hasClass("action-button")) {
+                    add_or_remove_from_group(user_group, undefined, $target_elem);
+                } else {
+                    const $group_row = row_for_group_id(user_group_id);
+                    add_or_remove_from_group(user_group, $group_row);
+                }
             }
             e.stopPropagation();
         },

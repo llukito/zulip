@@ -18,6 +18,7 @@ import type {
 } from "./group_permission_settings.ts";
 import * as group_setting_pill from "./group_setting_pill.ts";
 import {$t, get_language_list_columns} from "./i18n.ts";
+import {page_params} from "./page_params.ts";
 import * as people from "./people.ts";
 import {
     realm_default_settings_schema,
@@ -891,7 +892,8 @@ export function check_realm_settings_property_changed(elem: HTMLElement): boolea
         case "realm_can_summarize_topics_group":
         case "realm_create_multiuse_invite_group":
         case "realm_direct_message_initiator_group":
-        case "realm_direct_message_permission_group": {
+        case "realm_direct_message_permission_group":
+        case "realm_workplace_users_group": {
             const pill_widget = get_group_setting_widget(property_name);
             assert(pill_widget !== null);
             proposed_val = get_group_setting_widget_value(pill_widget);
@@ -989,8 +991,8 @@ export function get_group_setting_widget_value(
         return direct_subgroups[0];
     }
 
-    direct_subgroups.sort();
-    direct_members.sort();
+    direct_subgroups.sort((a, b) => a - b);
+    direct_members.sort((a, b) => a - b);
     return {direct_subgroups, direct_members};
 }
 
@@ -1153,6 +1155,7 @@ export function populate_data_for_realm_settings_request(
                     "create_multiuse_invite_group",
                     "direct_message_initiator_group",
                     "direct_message_permission_group",
+                    "workplace_users_group",
                 ]);
                 if (realm_group_settings.has(property_name)) {
                     const old_value = get_realm_settings_property_value(
@@ -1681,6 +1684,7 @@ export const group_setting_widget_map = new Map<string, GroupSettingPillContaine
     ["realm_create_multiuse_invite_group", null],
     ["realm_direct_message_initiator_group", null],
     ["realm_direct_message_permission_group", null],
+    ["realm_workplace_users_group", null],
 ]);
 
 export function get_group_setting_widget(setting_name: string): GroupSettingPillContainer | null {
@@ -1939,6 +1943,13 @@ export function get_group_assigned_realm_permissions(group: UserGroup): {
     } of settings_config.realm_group_permission_settings) {
         const assigned_permission_objects = [];
         for (const setting_name of settings) {
+            if (
+                setting_name === "workplace_users_group" &&
+                (!page_params.development_environment ||
+                    !page_params.non_workplace_pricing_eligible)
+            ) {
+                continue;
+            }
             const setting_value = realm[z.keyof(realm_schema).parse("realm_" + setting_name)];
             const can_edit = settings_config.owner_editable_realm_group_permission_settings.has(
                 setting_name,

@@ -1087,6 +1087,46 @@ class StreamAdminTest(ZulipTestCase):
         self.assertEqual(stream.history_public_to_subscribers, False)
         self.assertEqual(stream.can_create_topic_group.id, everyone_system_group.id)
 
+    def test_attachment_in_web_public_stream(self) -> None:
+        self.login("desdemona")
+        fp = StringIO("zulip!")
+        fp.name = "zulip.txt"
+
+        result = self.client_post("/json/user_uploads", {"file": fp})
+        url = self.assert_json_success(result)["url"]
+
+        owner = self.example_user("desdemona")
+        realm = owner.realm
+        self.make_stream("test_stream", realm=realm, is_web_public=True)
+        self.subscribe(owner, "test_stream")
+        body = f"First message ...[zulip.txt](http://{realm.host}" + url + ")"
+        msg_id = self.send_stream_message(owner, "test_stream", body, "test")
+        attachment = Attachment.objects.get(messages__id=msg_id)
+        self.assertTrue(attachment.is_web_public)
+
+        self.assertTrue(validate_attachment_request_for_spectator_access(realm, attachment))
+
+        do_set_realm_property(realm, "enable_spectator_access", False, acting_user=None)
+        attachment = Attachment.objects.get(messages__id=msg_id)
+        self.assertIsNone(attachment.is_web_public)
+
+        self.assertFalse(validate_attachment_request_for_spectator_access(realm, attachment))
+        attachment = Attachment.objects.get(messages__id=msg_id)
+        self.assertIsNone(attachment.is_web_public)
+
+        # Check that is_web_public is set as False when uploading a file in
+        # web-public stream with spectator access disabled for realm.
+        fp = StringIO("zulip!")
+        fp.name = "zulip1.txt"
+
+        result = self.client_post("/json/user_uploads", {"file": fp})
+        url = self.assert_json_success(result)["url"]
+
+        body = f"Second message ...[zulip1.txt](http://{realm.host}" + url + ")"
+        msg_id = self.send_stream_message(owner, "test_stream", body, "test")
+        attachment = Attachment.objects.get(messages__id=msg_id)
+        self.assertEqual(attachment.is_web_public, False)
+
     def test_stream_permission_changes_updates_updates_attachments(self) -> None:
         self.login("desdemona")
         fp = StringIO("zulip!")
@@ -1518,6 +1558,10 @@ class StreamAdminTest(ZulipTestCase):
                 {"is_private": orjson.dumps(False).decode()},
                 f"@_**Desdemona|{desdemona.id}** changed the [access permissions]",
             ),
+            (
+                {"topics_policy": StreamTopicsPolicyEnum.allow_empty_topic.name},
+                f'@_**Desdemona|{desdemona.id}** changed the "Allow posting to the *general chat* topic?" setting',
+            ),
         ]
 
         for param, notice in param_to_notice_list:
@@ -1782,7 +1826,9 @@ class StreamAdminTest(ZulipTestCase):
         def get_notified_user_ids() -> set[int]:
             # Two events should be sent: stream_name update and notification message.
             with self.capture_send_event_calls(expected_num_events=2) as events:
-                stream_id = get_stream("stream_name1", user_profile.realm).id
+                stream = get_stream("stream_name1", user_profile.realm)
+                stream_id = stream.id
+                old_name = stream.name
                 result = self.client_patch(
                     f"/json/streams/{stream_id}", {"new_name": "stream_name2"}
                 )
@@ -1796,7 +1842,7 @@ class StreamAdminTest(ZulipTestCase):
                     property="name",
                     value="stream_name2",
                     stream_id=stream_id,
-                    name="sTREAm_name1",
+                    name=old_name,
                 ),
             )
             self.assertRaises(Stream.DoesNotExist, get_stream, "stream_name1", realm)

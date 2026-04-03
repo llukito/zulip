@@ -32,6 +32,7 @@ from zerver.models import DefaultStream, Draft, Realm, UserActivity, UserProfile
 from zerver.models.realms import get_realm
 from zerver.models.streams import get_stream
 from zerver.models.users import get_system_bot, get_user
+from zerver.tornado.django_api import EventQueueData
 from zerver.worker.user_activity import UserActivityWorker
 
 if TYPE_CHECKING:
@@ -49,12 +50,14 @@ class HomeTest(ZulipTestCase):
         "embedded_bots_enabled",
         "furthest_read_time",
         "insecure_desktop_app",
+        "is_cloud_realm_with_discounted_plan",
         "is_spectator",
         "language_list",
         "login_page",
         "narrow",
         "narrow_stream",
         "no_event_queue",
+        "non_workplace_pricing_eligible",
         "page_type",
         "presence_history_limit_days_for_web_app",
         "promote_sponsoring_zulip",
@@ -93,6 +96,7 @@ class HomeTest(ZulipTestCase):
         "tenor_api_key",
         "gif_rating_policy_options",
         "has_zoom_token",
+        "idle_queue_timeout_secs",
         "is_admin",
         "is_guest",
         "is_moderator",
@@ -233,6 +237,7 @@ class HomeTest(ZulipTestCase):
         "realm_want_advertise_in_communities_directory",
         "realm_welcome_message_custom_text",
         "realm_wildcard_mention_policy",
+        "realm_workplace_users_group",
         "realm_zulip_update_announcements_stream_id",
         "realm_moderation_request_channel_id",
         "recent_private_conversations",
@@ -380,11 +385,13 @@ class HomeTest(ZulipTestCase):
             "embedded_bots_enabled",
             "furthest_read_time",
             "insecure_desktop_app",
+            "is_cloud_realm_with_discounted_plan",
             "is_spectator",
             "language_cookie_name",
             "language_list",
             "login_page",
             "no_event_queue",
+            "non_workplace_pricing_eligible",
             "page_type",
             "presence_history_limit_days_for_web_app",
             "promote_sponsoring_zulip",
@@ -482,6 +489,15 @@ class HomeTest(ZulipTestCase):
 
         # Changing the plan_type to Standard grants access to AzureAD, but not SAML:
         do_change_realm_plan_type(realm, Realm.PLAN_TYPE_STANDARD, acting_user=None)
+        customer = Customer.objects.create(realm=realm, stripe_customer_id="cus_id")
+        CustomerPlan.objects.create(
+            customer=customer,
+            billing_cycle_anchor=timezone_now(),
+            billing_schedule=CustomerPlan.BILLING_SCHEDULE_ANNUAL,
+            next_invoice_date=timezone_now(),
+            tier=CustomerPlan.TIER_CLOUD_STANDARD,
+            status=CustomerPlan.ACTIVE,
+        )
 
         with self.settings(
             AUTHENTICATION_BACKENDS=(
@@ -639,8 +655,9 @@ class HomeTest(ZulipTestCase):
         self.assertIn("test_stream_7", html)
 
     def _get_home_page(self, **kwargs: Any) -> "TestHttpResponse":
+        queue_data = EventQueueData(queue_id="test-queue-id", idle_queue_timeout_secs=600)
         with (
-            patch("zerver.lib.events.request_event_queue", return_value=42),
+            patch("zerver.lib.events.request_event_queue", return_value=queue_data),
             patch("zerver.lib.events.get_user_events", return_value=[]),
         ):
             result = self.client_get("/", dict(**kwargs))
@@ -1337,8 +1354,9 @@ class HomeTest(ZulipTestCase):
         self.login_user(user)
         result = self._get_home_page()
         self.check_rendered_logged_in_app(result)
+        queue_data = EventQueueData(queue_id="test-queue-id", idle_queue_timeout_secs=600)
         with (
-            patch("zerver.lib.events.request_event_queue", return_value=42),
+            patch("zerver.lib.events.request_event_queue", return_value=queue_data),
             patch("zerver.lib.events.get_user_events", return_value=[]),
         ):
             result = self.client_get("/de/")
